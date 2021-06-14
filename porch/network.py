@@ -55,6 +55,8 @@ def xavier_trunc_normal_(tensor: torch.Tensor, gain: float = 1.0) -> torch.Tenso
     """
     fan_in, fan_out = _calculate_fan_in_and_fan_out(tensor)
     std = gain * math.sqrt(2.0 / float(fan_in + fan_out))
+    # compensate std dev for truncation (https://towardsdatascience.com/hyper-parameters-in-action-part-ii-weight-initializers-35aee1a28404)
+    std /= 0.87962566103423978
 
     return _no_grad_trunc_normal_(tensor, 0.0, std, -2.0 * std, 2.0 * std)
 
