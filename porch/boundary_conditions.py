@@ -54,7 +54,7 @@ class DirichletBC(BoundaryCondition):
 
     def get_samples(self, n_samples: int, device=None) -> Tensor:
         # TODO: implement different sampling techniques
-        relevant_limits = self.geometry.limits
+        relevant_limits = self.geometry.limits.detach().clone()
         relevant_limits[self.constant_idx, :] = self.constant_input
 
         input = get_random_samples(relevant_limits, n_samples, device)
