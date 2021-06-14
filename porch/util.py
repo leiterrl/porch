@@ -3,11 +3,11 @@ from enum import Enum
 import numpy as np
 
 
+# TODO: handle non-scalar case
 def gradient(y, x):
-    create_graph = True
     grad_outputs = torch.ones_like(y)
     grad = torch.autograd.grad(
-        y, [x], grad_outputs=grad_outputs, create_graph=create_graph, retain_graph=True
+        y, [x], grad_outputs=grad_outputs, create_graph=True, retain_graph=True
     )[0]
     return grad
 
