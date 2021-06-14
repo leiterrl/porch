@@ -26,10 +26,13 @@ class BaseModel:
         output = {}
         for loss_name, loss_fn in self.losses.items():
             self.dataset[loss_name].requires_grad_(True)
-            output[loss_name] = loss_fn(loss_name)
+            output[loss_name] = loss_fn(loss_name) * self.loss_weights[loss_name]
             self.dataset[loss_name].requires_grad_(False)
 
         return output
+
+    def compute_magnitude_normalization(self):
+        raise NotImplementedError
 
     def get_input(self, name: str):
         d_in = self.network.d_in
@@ -47,6 +50,9 @@ class BaseModel:
         for name in self.losses.keys():
             self.loss_weights[name] = 1.0
 
+    def setup_validation_data(self, n_validation: int) -> None:
+        raise NotImplementedError
+
     def set_dataset(self, dataset: NamedTensorDataset):
         for name, value in dataset._dataset.items():
             if value.shape[1] != self.network.d_in + self.network.d_out:
@@ -55,6 +61,17 @@ class BaseModel:
                 )
 
         self.dataset = dataset._dataset
+
+    def compute_validation_error(self):
+        validation_in = self.validation_data[:, : self.network.d_in]
+        validation_labels = self.validation_data[:, -self.network.d_out :]
+
+        self.network.eval()
+        prediction = self.network.forward(validation_in)
+        self.network.train()
+
+        return torch.mean(torch.pow(prediction - validation_labels, 2))
+        # return torch.sqrt(torch.sum(torch.pow(prediction - validation_labels, 2)))
 
     def set_boundary_conditions(self, boundary_conditions: "list[BoundaryCondition]"):
         self.boundary_conditions = boundary_conditions
