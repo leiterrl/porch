@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from .util import get_random_samples
 from torch import Tensor
 from abc import ABC
-from torch import hstack
+from torch import hstack, zeros
 
 
 class BoundaryCondition(ABC):
@@ -26,6 +26,10 @@ class BoundaryCondition(ABC):
     @abstractmethod
     def get_samples(self, n_samples: int) -> Tensor:
         raise NotImplementedError
+
+    @staticmethod
+    def zero_bc_fn(t_in: Tensor) -> Tensor:
+        return zeros([t_in.shape[0], 1])
 
 
 class DirichletBC(BoundaryCondition):
@@ -65,7 +69,7 @@ class DirichletBC(BoundaryCondition):
 
 class DiscreteBC(BoundaryCondition):
     def __init__(self, name: str, geom: Geometry, data: Tensor) -> None:
-        """Construct a Dirichlet Boundary Condition object
+        """Construct a Discrite Boundary Condition object
 
         Args:
             name: gives the boundary condition a unique name
