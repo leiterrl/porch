@@ -1,6 +1,6 @@
 from importlib import import_module
 
-mod_diffusion = import_module("experiments.1d_diffusion")
+mod_diffusion = import_module(".1d_diffusion", package="experiments")
 
 
 def test_diffusion_experiment():
