@@ -167,8 +167,9 @@ class DiffusionModel(BaseModel):
         return fig
 
 
-def main(n_epochs=10000) -> float:
-    model_dir = "/import/sgs.local/scratch/leiterrl/1d_diffusion"
+def main(
+    n_epochs=10000, model_dir="/import/sgs.local/scratch/leiterrl/1d_diffusion"
+) -> float:
     num_layers = 4
     num_neurons = 20
     weight_norm = False
