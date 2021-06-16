@@ -4,3 +4,4 @@ build-backend = "setuptools.build_meta"
 
 [pytest]
 testpaths = "testing"
+addopts = -rf --import-mode=importlib
