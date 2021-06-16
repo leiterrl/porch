@@ -1,5 +1,5 @@
 from matplotlib.figure import Figure
-from porch.boundary_conditions import DirichletBC
+from porch.boundary_conditions import BoundaryCondition, DirichletBC
 from porch.training import Trainer
 from porch.dataset import NamedTensorDataset
 import logging
@@ -19,6 +19,8 @@ F = 0.5
 E = 0.5
 k = 2
 D = 0.05
+
+
 # Analytical Solution of the Diffusion PDE --> d^2/dx^2 (P) = 1/D * d/dt (P)
 def P(x, t):
     return (F * torch.cos(k * x) + E * torch.sin(k * x)) * torch.exp(-(k ** 2) * D * t)
@@ -30,8 +32,9 @@ class DiffusionModel(BaseModel):
         network: FullyConnected,
         geometry: Geometry,
         config: PorchConfig,
+        boundary_conditions: "list[BoundaryCondition]",
     ) -> None:
-        super().__init__(network, geometry, config)
+        super().__init__(network, geometry, config, boundary_conditions)
 
     def boundary_loss(self, loss_name) -> torch.Tensor:
         """u(x=lb,t) = u(x=ub,t) = 0"""
@@ -68,7 +71,7 @@ class DiffusionModel(BaseModel):
 
         f = u_xx - u_t * D_inv
 
-        return torch.pow(f, 2)
+        return torch.pow(f - labels, 2)
 
     def setup_losses(self) -> None:
         self.losses = {"boundary": self.boundary_loss, "interior": self.interior_loss}
@@ -155,8 +158,8 @@ class DiffusionModel(BaseModel):
             # vmin=0.0,
             # vmax=1.0,
         )
-        cbar = fig.colorbar(im1, extend="both", shrink=0.9, ax=axs[0])
-        cbar = fig.colorbar(im2, extend="both", shrink=0.9, ax=axs[1])
+        fig.colorbar(im1, extend="both", shrink=0.9, ax=axs[0])
+        fig.colorbar(im2, extend="both", shrink=0.9, ax=axs[1])
 
         axs[1].set_xlabel("$t$")
         axs[0].set_ylabel("$x$")
@@ -164,7 +167,7 @@ class DiffusionModel(BaseModel):
         return fig
 
 
-def main():
+def main(n_epochs=10000) -> float:
     model_dir = "/import/sgs.local/scratch/leiterrl/1d_diffusion"
     num_layers = 4
     num_neurons = 20
@@ -178,7 +181,7 @@ def main():
     else:
         device = torch.device("cpu")
 
-    config = PorchConfig(device=device, lr=0.001)
+    config = PorchConfig(device=device, lr=0.001, epochs=n_epochs)
 
     xlims = (0.0, 2.0 * np.pi)
     tlims = (0.0, 10.0)
@@ -195,17 +198,12 @@ def main():
         z_in = torch.atleast_2d(P(x_in_space, t_in_space)).T
         return z_in
 
-    ic = DirichletBC("initial_bc", geom, tlims[0], ic_func)
-    ic.set_axis(torch.Tensor([False, True]))
+    ic_axis_definition = torch.Tensor([False, True])
+    ic = DirichletBC("initial_bc", geom, ic_axis_definition, tlims[0], ic_func)
 
     boundary_conditions = [ic]
 
-    model = DiffusionModel(network, geom, config)
-    # TODO: add to constructor
-    model.set_boundary_conditions(boundary_conditions)
-    model.setup_losses()
-    # TODO: initialize by default
-    model.setup_loss_weights()
+    model = DiffusionModel(network, geom, config, boundary_conditions)
 
     model.setup_data(n_boundary, n_interior)
     model.setup_validation_data(n_validation)
@@ -213,7 +211,7 @@ def main():
 
     trainer = Trainer(model, config, model_dir)
 
-    trainer.train()
+    return trainer.train()
 
 
 if __name__ == "__main__":

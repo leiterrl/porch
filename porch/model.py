@@ -1,11 +1,9 @@
 from .network import FullyConnected
 from .dataset import NamedTensorDataset
-from torch._C import DictType
 from .config import PorchConfig
 from .geometry import Geometry
 from .boundary_conditions import BoundaryCondition
 import torch
-import logging
 
 
 class BaseModel:

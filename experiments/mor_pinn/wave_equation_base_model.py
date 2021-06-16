@@ -1,8 +1,9 @@
+import numpy as np
+import logging
 from porch.boundary_conditions import BoundaryCondition
 
 from porch.dataset import NamedTensorDataset
 from experiments.mor_pinn.wave_mor_data_generation import DataWaveEquationZero
-import logging
 
 
 # logging.basicConfig(level=logging.DEBUG)
@@ -22,7 +23,6 @@ import seaborn as sns
 
 sns.set_theme(style="white", palette="mako")
 sns.color_palette("mako", as_cmap=True)
-import numpy as np
 
 
 class WaveEquationBaseModel(BaseModel):
@@ -70,7 +70,7 @@ class WaveEquationBaseModel(BaseModel):
 
         grad_u = gradient(prediction, data_in)
         u_t = grad_u[..., 0]
-        u_x = grad_u[..., 1]
+        # u_x = grad_u[..., 1]
 
         # gradMagnitude = torch.mean(
         #     torch.pow(torch.add(torch.abs(u_x), torch.abs(u_t)), 2)
@@ -80,7 +80,7 @@ class WaveEquationBaseModel(BaseModel):
         return torch.pow(u_t - labels, 2)
 
     def interior_loss(self, loss_name):
-        """u_tt - \mu² * u_xx = 0"""
+        """u_tt - \\mu² * u_xx = 0"""
         data_in = self.get_input(loss_name)
         if len(data_in) == 0:
             return torch.tensor([], device=self.device)
@@ -231,8 +231,8 @@ class WaveEquationBaseModel(BaseModel):
             vmin=0.0,
             vmax=1.0,
         )
-        cbar = fig.colorbar(im1, extend="both", shrink=0.9, ax=axs[0])
-        cbar = fig.colorbar(im2, extend="both", shrink=0.9, ax=axs[1])
+        fig.colorbar(im1, extend="both", shrink=0.9, ax=axs[0])
+        fig.colorbar(im2, extend="both", shrink=0.9, ax=axs[1])
 
         nrom = self.get_labels("rom").shape[0]
         ninterior = self.get_labels("interior").shape[0]

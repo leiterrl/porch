@@ -48,7 +48,7 @@ class Trainer:
     def update_progress(self) -> None:
         self.progress_bar.update(1)
 
-    def train(self) -> None:
+    def train(self) -> float:
         logging.info("Start training...")
         self.epoch = 0
         for epoch in range(self.config.epochs + 1):
@@ -70,3 +70,4 @@ class Trainer:
 
         # self.writer.add_hparams(h_dict, h_metrics)
         self.writer.close()
+        return val_error

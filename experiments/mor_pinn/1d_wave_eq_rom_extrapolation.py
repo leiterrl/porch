@@ -1,5 +1,3 @@
-from inspect import BoundArguments
-from torch._C import device
 from porch.boundary_conditions import BoundaryCondition, DirichletBC, DiscreteBC
 from porch.training import Trainer
 from porch.dataset import NamedTensorDataset
@@ -8,19 +6,16 @@ from experiments.mor_pinn.wave_equation_base_model import WaveEquationBaseModel
 import logging
 
 import torch
-from torch.utils.data import TensorDataset
 from porch.config import PorchConfig
 from porch.geometry import Geometry
-from porch.model import BaseModel
 from porch.network import FullyConnected
-from porch.util import gradient
 
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import seaborn as sns
+import numpy as np
 
 sns.set_theme(style="white", palette="mako")
 sns.color_palette("mako", as_cmap=True)
-import numpy as np
 
 
 class WaveEquationExtrapolation(WaveEquationBaseModel):

@@ -1,0 +1,7 @@
+[flake8]
+exclude = .git,
+    __pycache__,
+    build,
+    dist,
+    experiments/mor_pinn/wave_mor*
+ignore = E501, E203, E712

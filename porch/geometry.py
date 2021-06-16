@@ -1,5 +1,4 @@
 import torch
-from .boundary_conditions import BoundaryCondition
 from .util import get_random_samples, get_regular_grid
 
 

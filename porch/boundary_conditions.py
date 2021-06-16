@@ -7,7 +7,6 @@ if TYPE_CHECKING:
 from abc import ABC, abstractmethod
 from .util import get_random_samples, get_regular_grid
 from torch import Tensor
-from abc import ABC
 from torch import hstack, zeros
 
 

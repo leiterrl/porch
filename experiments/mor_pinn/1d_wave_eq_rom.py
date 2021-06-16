@@ -1,8 +1,6 @@
-from inspect import BoundArguments
-from torch._C import device
 from porch.boundary_conditions import BoundaryCondition, DirichletBC, DiscreteBC
 from porch.training import Trainer
-from porch.dataset import NamedTensorDataset
+
 from experiments.mor_pinn.wave_mor_data_generation import DataWaveEquationZero
 from experiments.mor_pinn.wave_equation_base_model import WaveEquationBaseModel
 import argparse
@@ -13,19 +11,17 @@ import argparse
 # logger.setLevel(5)
 
 import torch
-from torch.utils.data import TensorDataset
+
 from porch.config import PorchConfig
 from porch.geometry import Geometry
-from porch.model import BaseModel
-from porch.network import FullyConnected
-from porch.util import gradient
 
-import matplotlib.pyplot as plt
+from porch.network import FullyConnected
+
+
 import seaborn as sns
 
 sns.set_theme(style="white", palette="mako")
 sns.color_palette("mako", as_cmap=True)
-import numpy as np
 
 
 def main():
