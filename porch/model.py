@@ -12,11 +12,18 @@ class BaseModel:
     _input: NamedTensorDataset
 
     def __init__(
-        self, network: FullyConnected, geometry: Geometry, config: PorchConfig
+        self,
+        network: FullyConnected,
+        geometry: Geometry,
+        config: PorchConfig,
+        boundary_conditions: "list[BoundaryCondition]",
     ):
         self.network = network
         self.geometry = geometry
         self.config = config
+        self.set_boundary_conditions(boundary_conditions)
+        self.setup_losses()
+        self.setup_loss_weights()
 
     def get_data_names(self) -> list:
         return self.losses.keys()
