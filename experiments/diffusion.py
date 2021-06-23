@@ -182,7 +182,7 @@ def main(
     else:
         device = torch.device("cpu")
 
-    config = PorchConfig(device=device, lr=0.001, epochs=n_epochs)
+    config = PorchConfig(device=device, lr=0.001, epochs=n_epochs, lra=True)
 
     xlims = (0.0, 2.0 * np.pi)
     tlims = (0.0, 10.0)

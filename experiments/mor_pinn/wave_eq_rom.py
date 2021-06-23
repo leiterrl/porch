@@ -70,7 +70,7 @@ def main():
     else:
         device = torch.device("cpu")
 
-    config = PorchConfig(device=device)
+    config = PorchConfig(device=device, lra=args.lra)
     config.epochs = 10000
 
     xlims = (-1.0, 1.0)
