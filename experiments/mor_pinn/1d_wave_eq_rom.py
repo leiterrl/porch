@@ -48,6 +48,11 @@ def main():
         action="store_true",
         help="Set artificial noise value for ROM",
     )
+    parser.add_argument(
+        "--lra",
+        action="store_true",
+        help="Use learning rate annealing",
+    )
     args = parser.parse_args()
 
     model_dir = "/import/sgs.local/scratch/leiterrl/1d_wave_eq_rom"
