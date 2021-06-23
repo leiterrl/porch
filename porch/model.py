@@ -26,6 +26,17 @@ class BaseModel:
     def get_data_names(self) -> list:
         return self.losses.keys()
 
+    # TODO: merge methods below
+    def compute_losses_unweighted(self):
+        """Iterate loss functionals and evaluate on current self.input"""
+        output = {}
+        for loss_name, loss_fn in self.losses.items():
+            self.dataset[loss_name].requires_grad_(True)
+            output[loss_name] = loss_fn(loss_name)
+            self.dataset[loss_name].requires_grad_(False)
+
+        return output
+
     def compute_losses(self):
         """Iterate loss functionals and evaluate on current self.input"""
         output = {}
