@@ -253,7 +253,7 @@ class WaveEquationBaseModel(BaseModel):
             data_in = self.get_input(name).cpu().numpy()
             axs.scatter(data_in[:, 0], data_in[:, 1], label=name, alpha=0.5)
 
-        axs.legend()
+        axs.legend(loc="upper right")
         plt.savefig(f"plots/dataset_{name}.png")
 
     def plot_boundary_data(self, name: str) -> None:
