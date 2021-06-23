@@ -10,6 +10,7 @@ class PorchConfig:
     optimizer_type: str = "adam"
     weight_norm: bool = False
     lra: bool = False
+    lra_alpha: float = 0.9
     optimal_weighting: bool = False
     device: torch.device = torch.device("cpu")
     epochs: int = 10000
