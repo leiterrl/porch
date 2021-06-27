@@ -17,6 +17,16 @@ class PorchConfig:
     print_freq: int = 100
     summary_freq: int = 1000
 
+    wave_speed: float = 1.0
+
+    n_neurons: int = 20
+    n_layers: int = 4
+
+    n_boundary: int = 1000
+    n_interior: int = 10000
+
+    model_dir: str = "./run"
+
     def __post__init(self):
         if self.lra and self.optimal_weighting:
             raise RuntimeError(
