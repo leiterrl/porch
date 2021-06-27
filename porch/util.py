@@ -11,6 +11,12 @@ def gradient(y, x):
     )[0]
     return grad
 
+def hstack(tensor_tuple):
+    return torch.cat(tensor_tuple, dim=1)
+
+def vstack(tensor_tuple):
+    return torch.cat(tensor_tuple, dim=0)
+
 
 class SamplingType(Enum):
     RANDOM_UNIFORM = 1
