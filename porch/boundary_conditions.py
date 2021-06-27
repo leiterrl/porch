@@ -6,8 +6,13 @@ if TYPE_CHECKING:
 
 from abc import ABC, abstractmethod
 from .util import get_random_samples, get_regular_grid
-from torch import Tensor
-from torch import hstack, zeros
+import torch
+from torch import Tensor, zeros
+
+try:
+    from torch import hstack, vstack
+except ImportError:
+    from .util import hstack, vstack
 
 
 class BoundaryCondition(ABC):
@@ -69,14 +74,33 @@ class DirichletBC(BoundaryCondition):
     def get_samples(self, n_samples: int, device=None) -> Tensor:
         # TODO: implement different sampling techniques
         relevant_limits = self.geometry.limits.detach().clone()
-        relevant_limits[self.constant_idx, :] = self.constant_input
+        # relevant_limits[self.constant_idx, :] = self.constant_input
+        const_idx = (self.constant_idx == True).nonzero(as_tuple=True)[0]
+        relevant_limits = vstack(
+            [
+                relevant_limits[:const_idx, :],
+                relevant_limits[const_idx + 1 :, :],
+            ]
+        )
 
         if self.random:
             input = get_random_samples(relevant_limits, n_samples, device)
         else:
             input = get_regular_grid(
-                (n_samples,) * self.geometry.d, relevant_limits, device
+                (n_samples,) * (self.geometry.d - 1), relevant_limits, device
             )
+
+        constant_column = (
+            torch.ones([input.shape[0], 1], device=device) * self.constant_input
+        )
+
+        input = hstack(
+            [
+                input[:, :const_idx],
+                constant_column,
+                input[:, const_idx:],
+            ]
+        )
 
         labels = self.eval_fn(input).to(device=device)
 
