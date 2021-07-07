@@ -95,9 +95,6 @@ class WaveEquationErrorSensitive(WaveEquationBaseModel):
         self.d_t = torch.as_tensor(dt, device=self.config.device, dtype=torch.float32)
         self.d_xi = torch.as_tensor(dxi, device=self.config.device, dtype=torch.float32)
 
-        # TODO: remove hack to match dimensions
-        self.epsilon = torch.vstack([self.epsilon[0, :], self.epsilon])
-
     def rom_loss(self, loss_name):
         data_in = self.get_input(loss_name)
         labels = self.get_labels(loss_name)
@@ -193,7 +190,7 @@ def main():
     data = DataWaveEquationZero()
     X_init, u_init = data.get_initial_cond_exact(wave_speed)
 
-    initial_data = torch.hstack([X_init, u_init])
+    initial_data = hstack([X_init, u_init])
     ic = DiscreteBC("initial_bc", geom, initial_data)
 
     bc_axis = torch.Tensor([False, True])
