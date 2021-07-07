@@ -64,7 +64,6 @@ def run_model(config: PorchConfig):
         config,
         config.wave_speed,
         boundary_conditions,
-        noise=0.0,
         nointerior=False,
     )
 
@@ -112,9 +111,6 @@ def run_model(config: PorchConfig):
 def main():
 
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--noise", type=float, default=0.0, help="Set artificial noise value for ROM"
-    )
     parser.add_argument(
         "--ninterior",
         type=int,

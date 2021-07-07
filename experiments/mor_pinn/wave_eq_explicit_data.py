@@ -67,7 +67,6 @@ def run_model(config: PorchConfig):
         config,
         config.wave_speed,
         boundary_conditions,
-        noise=0.0,
         nointerior=False,
     )
 
