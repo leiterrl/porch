@@ -108,6 +108,27 @@ class DataWaveEquationZero:
             )
         return torch.as_tensor(U, dtype=torch.float32)
 
+    def get_epsilon(self, wave_speed: float):
+        # plot error over time
+        # estimated error
+        mu = Parameter({"wave_speed": wave_speed})
+        u = self.rom.solve(mu=mu)
+        err_est = self.rom.estimator.estimate(
+            u, mu=mu, m=self.rom, return_error_sequence=True
+        )
+        # true error
+
+        # err_norms = l2_norm(Err)
+        return torch.as_tensor(err_est[..., np.newaxis], dtype=torch.float32)
+
+    def get_dt(self):
+        return self.fom.T / self.fom.time_stepper.nt
+
+    # TODO: fix hardcoded spatial extend
+    def get_dxi(self):
+        # fom.grid.domain ?
+        return 2.0 / self.fom.num_intervals
+
     # TODO: fix hardcoded limits
     def get_input(self):
         grid_x = np.linspace(-1.0, 1.0, self.fom.num_intervals + 1)
