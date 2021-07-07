@@ -167,7 +167,6 @@ class DataWaveEquationZero:
         # fom.grid.domain ?
         return self.dxi
 
-    # TODO: fix hardcoded limits
     def get_input(self, subsample: bool = False):
         n_x = self.fom.num_intervals + 1
         n_t = self.fom.time_stepper.nt
@@ -176,7 +175,8 @@ class DataWaveEquationZero:
             n_x = n_x // 6
             n_t = n_t // 6
 
-        grid_x = np.linspace(-1.0, 1.0, n_x)
+        domain = self.fom.grid.domain
+        grid_x = np.linspace(domain[0], domain[1], n_x)
         grid_t = np.linspace(0.0, self.fom.T, n_t)
 
         tt, xx = np.meshgrid(grid_t, grid_x, indexing="ij")
