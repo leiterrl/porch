@@ -5,6 +5,11 @@ from porch.boundary_conditions import BoundaryCondition
 from porch.dataset import NamedTensorDataset
 from experiments.mor_pinn.wave_mor_data_generation import DataWaveEquationZero
 
+try:
+    from torch import hstack, vstack
+except ImportError:
+    from porch.util import hstack, vstack
+
 
 # logging.basicConfig(level=logging.DEBUG)
 
@@ -131,10 +136,10 @@ class WaveEquationBaseModel(BaseModel):
     def setup_losses(self):
         self.losses = {
             "boundary": self.boundary_loss,
+            "ic_t": self.ic_loss,
+            "interior": self.interior_loss,
             "rom": self.rom_loss,
         }
-        if not self.nointerior:
-            self.losses["interior"] = self.interior_loss
 
     def setup_data(self, n_boundary: int, n_interior: int, n_rom: int):
         bc_tensors = []
@@ -154,7 +159,15 @@ class WaveEquationBaseModel(BaseModel):
                 device=self.config.device,
                 dtype=torch.float32,
             )
-            interior_data = torch.hstack([interior_data, interior_labels])
+            interior_data = hstack([interior_data, interior_labels])
+
+        initial_input = self.data.get_input().to(device=self.config.device)[
+            0 : self.data.fom.num_intervals + 1, :
+        ]
+        ic_t_labels = torch.zeros(
+            [initial_input.shape[0], 1], device=self.config.device, dtype=torch.float32
+        )
+        ic_t_data = hstack([initial_input, ic_t_labels])
 
         # Rom Data
 
@@ -171,22 +184,23 @@ class WaveEquationBaseModel(BaseModel):
             noise_tensor = torch.rand_like(u) * noise_scale
             u += noise_tensor
 
-        rom_data = torch.hstack([X, u]).to(device=self.config.device)
+        rom_data = hstack([X, u]).to(device=self.config.device)
 
-        dataset_dict = {"boundary": boundary_data, "rom": rom_data}
-        if not self.nointerior:
-            dataset_dict["interior"] = interior_data
+        dataset_dict = {
+            "interior": interior_data,
+            "boundary": boundary_data,
+            "rom": rom_data,
+            "ic_t": ic_t_data,
+        }
+        # if not self.nointerior:
+        # dataset_dict["interior"] = interior_data
         complete_dataset = NamedTensorDataset(dataset_dict)
 
         self.set_dataset(complete_dataset)
 
     def setup_validation_data(self) -> None:
-        X = self.data.get_input()
-        val_X = X.detach().clone()
-        val_u = self.data.get_data_fom(self.wave_speed)
-        self.validation_data = torch.hstack([val_X, val_u]).to(
-            device=self.config.device
-        )
+        val_X, val_u = self.data.get_explicit_solution_data(self.wave_speed)
+        self.validation_data = hstack([val_X, val_u]).to(device=self.config.device)
 
     def plot_validation(self):
         validation_in = self.validation_data[:, : self.network.d_in]
@@ -249,9 +263,11 @@ class WaveEquationBaseModel(BaseModel):
 
     def plot_dataset(self, name: str) -> None:
         fig, axs = plt.subplots(1, 1, figsize=[12, 6])
-        for name in self.get_data_names():
-            data_in = self.get_input(name).cpu().numpy()
-            axs.scatter(data_in[:, 0], data_in[:, 1], label=name, alpha=0.5)
+        for data_name in self.get_data_names():
+            if data_name == "ic_t":
+                continue
+            data_in = self.get_input(data_name).cpu().numpy()
+            axs.scatter(data_in[:, 0], data_in[:, 1], label=data_name, alpha=0.5)
 
         axs.legend(loc="upper right")
         plt.savefig(f"plots/dataset_{name}.png")

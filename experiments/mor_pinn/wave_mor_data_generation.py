@@ -1,19 +1,20 @@
 import os
 import sys
+from pymordemos.explicit_solution_scenario_zero import expl_sol_handle
 import torch
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import logging
 import numpy as np
-from experiments.mor_pinn.wave_mor_utils import (
+
+# from experiments.mor_pinn.wave_mor_utils import (
+from pymordemos.wave_so import (
     generate_fom,
-    induced_norm,
     load_rom_data,
     compute_rom,
     save_rom_data,
     Parameter,
-    eval_rom,
 )
 
 
@@ -30,8 +31,6 @@ class DataWaveEquationZero:
         self.fom, self.n_wave_speed, self.max_extensions, self.rtol = generate_fom(
             scenario
         )
-        self.l2_norm = induced_norm(self.fom.products["l2"])
-        self.h1_semi_norm = induced_norm(self.fom.h1_product)
         self.dt = self.fom.T / self.fom.time_stepper.nt
 
         # compute ROM with greedy
@@ -119,6 +118,15 @@ class DataWaveEquationZero:
             np.vstack([tt.ravel(), xx.ravel()]).T, dtype=torch.float32
         )
 
+    def get_explicit_solution_data(
+        self, wave_speed: float
+    ) -> "tuple[torch.Tensor, torch.Tensor]":
+        input = self.get_input()
+        expl_sol, _, _ = expl_sol_handle(wave_speed)
+
+        U = expl_sol(input[:, 1], input[:, 0])
+        return input, torch.as_tensor(U[..., np.newaxis], dtype=torch.float32)
+
     def get_data_rom(self, wave_speed):
         """
         docstring
@@ -156,7 +164,7 @@ class DataWaveEquationZero:
         U = torch.zeros((input.shape[0], 1), dtype=torch.float32)
         return input, U
 
-    def get_initial_cond(self, wave_speed):
+    def get_initial_cond_fom(self, wave_speed):
         initial_input = self.get_input()[0 : self.fom.num_intervals + 1, :]
 
         mu = Parameter({"wave_speed": wave_speed})
@@ -165,84 +173,9 @@ class DataWaveEquationZero:
             U.ravel()[..., np.newaxis], dtype=torch.float32
         )
 
+    def get_initial_cond_exact(self, wave_speed):
+        initial_input = self.get_input()[0 : self.fom.num_intervals + 1, :]
+        expl_sol, _, _ = expl_sol_handle(wave_speed)
 
-# def single_wave_mor_data():
-#     scenario = 'GlasEtAl'
-#     fom, n_wave_speed, max_extensions, rtol = generate_fom(scenario)
-#     l2_norm = induced_norm(fom.products['l2'])
-#     h1_semi_norm = induced_norm(fom.h1_product)
-#     dt = fom.T / fom.time_stepper.nt
-
-#     # compute ROM with greedy
-#     load_save = False
-#     cache_path = os.path.join('cache', 'wave_so', scenario, 'rom_data.pkl')
-#     try:
-#         if not load_save:
-#             raise FileNotFoundError
-#         rom, reductor, greedy_data = load_rom_data(cache_path)
-#     except FileNotFoundError:
-#         training_set = fom.parameter_space.sample_uniformly({'wave_speed': n_wave_speed})
-#         rom, reductor, greedy_data = compute_rom(fom, training_set, max_extensions=max_extensions, rtol=rtol)
-#         if load_save:
-#             save_rom_data(rom, reductor, greedy_data, cache_path)
-
-#     # investigate quality visually for one parameter mu
-#     mu = Parameter({'wave_speed': 1.5})
-#     U = fom.solve(mu)
-#     u = rom.solve(mu=mu)
-#     U_rom = reductor.reconstruct(u)
-#     Err = U-U_rom
-
-#     # plot solutions and error
-#     # fom.visualizer.visualize(U, None, title='fom solution over time', block=False)
-#     # fom.visualizer.visualize(U_rom, None, title='rom solution over time', block=False)
-#     # fom.visualizer.visualize(Err, None, title='error over time', block=True)
-
-#     # # plot greedy error
-#     # plt.semilogy(greedy_data['max_errs'])
-#     # plt.title('Decrease of max error during greedy')
-#     # plt.xlabel('Numer of greedy iterations')
-#     # plt.ylabel('Maximal L2 error at final time t_end')
-#     # plt.show()
-
-#     # plot error over time
-#     # estimated error
-#     err_est = rom.estimator.estimate(u, mu=mu, m=rom, return_error_sequence=True)
-#     # true error
-
-#     err_norms = l2_norm(Err)
-#     # time-derivative of the true error
-#     # should in theory also be bounded by the estimate in Glas et al.
-#     alpha = np.sqrt(reductor.coercivity_estimator(mu))
-#     V_Err = Err[0].space.empty(len(Err)-1)
-#     for i in range(len(Err) - 2):
-#         # central difference
-#         V = Err[i+2] - Err[i]
-#         V.scal(1/(2*dt))
-#         V_Err.append(V)
-#     # compute Riesz representant
-#     V_Err = fom.h1_product.apply_inverse(V_Err)
-#     v_err_norms = np.sqrt(1/alpha) * h1_semi_norm(V_Err)
-#     # plot
-#     # plt.semilogy(err_norms, label='L2 error')
-#     # plt.semilogy(v_err_norms, label='1/4throot(alpha) * H1 velocity error')
-#     # plt.semilogy(err_est, label='error bound')
-#     # plt.legend(loc="upper left")
-#     # plt.title('Comparison of errors and computed error bound')
-#     # plt.xlabel('Time t')
-#     # plt.show()
-
-#     # test update_initial_value
-#     mu = Parameter({'wave_speed': 1.5})
-#     idx_pick_up = int(len(U_rom)/2)
-#     initial_data_numpy = U_rom[idx_pick_up].to_numpy()
-#     initial_velocity_numpy = ((U_rom[idx_pick_up+1] - U_rom[idx_pick_up]) * (1/(dt))).to_numpy()
-#     space = fom.operator.source
-#     new_initial_data = space.make_array(initial_data_numpy)
-#     new_initial_velocity = space.make_array(initial_velocity_numpy)
-
-#     U_new_rom, err_est = eval_rom(rom, reductor, mu, dt*idx_pick_up, fom.T, fom.time_stepper.nt - idx_pick_up, new_initial_data, new_initial_velocity)
-#     Err = U[idx_pick_up:] - U_new_rom
-
-# if __name__ == "__main__":
-#     single_wave_mor_data()
+        U = expl_sol(initial_input[:, 1], initial_input[:, 0])
+        return initial_input, torch.as_tensor(U[..., np.newaxis], dtype=torch.float32)

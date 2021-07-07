@@ -24,6 +24,7 @@ class PorchConfig:
 
     n_boundary: int = 1000
     n_interior: int = 10000
+    n_rom: int = 10000
 
     model_dir: str = "./run"
 
