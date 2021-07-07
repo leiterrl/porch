@@ -244,9 +244,9 @@ def run_model(config: PorchConfig):
     if config.optimal_weighting:
         ## optimal pinn weighting
         print("Optimal weighting")
-        model.loss_weights["ic_t"] = 1.0
-        model.loss_weights["boundary"] = 1.0
-        model.loss_weights["interior"] = 4.336622162708593e-06
+        model.loss_weights["ic_t"] = 0.9999560910636492
+        model.loss_weights["boundary"] = 0.9999560910636492
+        model.loss_weights["interior"] = 4.390893635083135e-05
     else:
         ## equal weights
         model.loss_weights["ic_t"] = 1.0
