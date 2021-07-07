@@ -199,14 +199,14 @@ class WaveEquationBaseModel(BaseModel):
         self.set_dataset(complete_dataset)
 
     def setup_validation_data(self) -> None:
-        val_X, val_u = self.data.get_explicit_solution_data(self.wave_speed)
+        val_X, val_u = self.data.get_explicit_solution_data(self.wave_speed, True)
         self.validation_data = hstack([val_X, val_u]).to(device=self.config.device)
 
     def plot_validation(self):
         validation_in = self.validation_data[:, : self.network.d_in]
         validation_labels = self.validation_data[:, -self.network.d_out :]
 
-        domain_shape = (-1, self.data.fom.num_intervals + 1)
+        domain_shape = (-1, (self.data.fom.num_intervals + 1) // 6)
         # TODO simplify by flattening
         domain_extent = self.geometry.limits.flatten()
         sns.color_palette("mako", as_cmap=True)
@@ -278,7 +278,7 @@ class WaveEquationBaseModel(BaseModel):
         data_in = self.get_input("boundary").cpu().numpy()
         labels = self.get_labels("boundary").cpu().numpy()
 
-        axs.scatter(data_in[:, 0], data_in[:, 1], c=labels, label="boundary", alpha=0.5)
+        # axs.scatter(data_in[:, 0], data_in[:, 1], c=labels, label="boundary", alpha=0.5)
 
         axs.legend()
         plt.savefig(f"plots/boundary_{name}.png")
