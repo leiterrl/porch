@@ -87,13 +87,9 @@ class WaveEquationErrorSensitive(WaveEquationBaseModel):
         complete_dataset = NamedTensorDataset(dataset_dict)
         self.set_dataset(complete_dataset)
 
-        dt = self.data.get_dt()
-        dxi = self.data.get_dxi()
         self.epsilon = self.data.get_epsilon(self.config.wave_speed).to(
             device=self.config.device
         )
-        self.d_t = torch.as_tensor(dt, device=self.config.device, dtype=torch.float32)
-        self.d_xi = torch.as_tensor(dxi, device=self.config.device, dtype=torch.float32)
 
     def rom_loss(self, loss_name):
         data_in = self.get_input(loss_name)
@@ -106,8 +102,7 @@ class WaveEquationErrorSensitive(WaveEquationBaseModel):
         prediction_spatial = prediction.reshape(domain_shape)
 
         loss_spatial = torch.sqrt(
-            (labels_spatial - prediction_spatial).abs().pow(2).sum(dim=1, keepdim=True)
-            * self.d_xi
+            (labels_spatial - prediction_spatial).pow(2).mean(dim=1, keepdim=True)
         )
 
         if self.heuristic:
@@ -115,7 +110,7 @@ class WaveEquationErrorSensitive(WaveEquationBaseModel):
         else:
             l_d_2 = (2 * self.epsilon + self.relu(loss_spatial - self.epsilon)).pow(2)
 
-        l_d = self.d_t * (l_d_2).sum(dim=0, keepdim=True)
+        l_d = (l_d_2).mean(dim=0, keepdim=True)
 
         return l_d
 
@@ -209,9 +204,9 @@ def main():
 
     if config.optimal_weighting:
         model.loss_weights = {
-            "interior": 2.2954030700590293e-06,
-            "rom": 0.5164989906081394,
-            "boundary": 0.4834987139887905,
+            "interior": 1.463186091733802e-05,
+            "rom": 0.666768040099405,
+            "boundary": 0.3332173280396778,
         }
     else:
         model.loss_weights = {

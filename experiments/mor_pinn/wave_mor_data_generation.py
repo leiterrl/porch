@@ -54,9 +54,6 @@ class DataWaveEquationZero:
             # load rom data
             reductor, basis_gen_data = load_rom_data(cache_folder)
 
-        self.dt = self.fom.T / self.fom.time_stepper.nt
-        self.dxi = 2.0 / self.fom.num_intervals
-
         U_rom, l2_err_est = eval_rom(reductor, mus[0], rb_size=rb_size)
         # compute mse error
         rom_mse = compute_mse(self.fom, U_rom, U_exact)
@@ -159,15 +156,6 @@ class DataWaveEquationZero:
         # err_norms = l2_norm(Err)
         return torch.as_tensor(self.mse_est[..., np.newaxis], dtype=torch.float32)
 
-    def get_dt(self):
-        return self.dt
-
-    # TODO: fix hardcoded spatial extend
-    def get_dxi(self):
-        # fom.grid.domain ?
-        return self.dxi
-
-    # TODO: fix hardcoded limits
     def get_input(self, subsample: bool = False):
         n_x = self.fom.num_intervals + 1
         n_t = self.fom.time_stepper.nt
@@ -176,7 +164,8 @@ class DataWaveEquationZero:
             n_x = n_x // 6
             n_t = n_t // 6
 
-        grid_x = np.linspace(-1.0, 1.0, n_x)
+        domain = self.fom.grid.domain
+        grid_x = np.linspace(domain[0], domain[1], n_x)
         grid_t = np.linspace(0.0, self.fom.T, n_t)
 
         tt, xx = np.meshgrid(grid_t, grid_x, indexing="ij")

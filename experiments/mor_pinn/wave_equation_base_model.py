@@ -38,13 +38,11 @@ class WaveEquationBaseModel(BaseModel):
         config: PorchConfig,
         wave_speed: float,
         boundary_conditions: "list[BoundaryCondition]",
-        noise: float = 0.0,
         nointerior: bool = False,
     ):
         self.nointerior = nointerior
         super().__init__(network, geometry, config, boundary_conditions)
         self.wave_speed = wave_speed
-        self.noise = noise
         self.data = DataWaveEquationZero()
 
     # TODO: only spatial boundary
@@ -127,9 +125,7 @@ class WaveEquationBaseModel(BaseModel):
         labels = self.get_labels(loss_name)
         prediction = self.network.forward(data_in)
 
-        mse_cutoff_squared = self.noise ** 2
         mse_diff_squared = torch.pow(prediction - labels, 2)
-        mse_diff_squared[mse_diff_squared < mse_cutoff_squared] = 0.0
 
         return mse_diff_squared
 
@@ -178,11 +174,6 @@ class WaveEquationBaseModel(BaseModel):
         rand_rows = torch.randperm(X.shape[0])[:n_rom]
         X = X[rand_rows, :]
         u = u[rand_rows]
-
-        if self.noise > 0.0:
-            noise_scale = (u.max() - u.min()) * self.noise
-            noise_tensor = torch.rand_like(u) * noise_scale
-            u += noise_tensor
 
         rom_data = hstack([X, u]).to(device=self.config.device)
 
@@ -252,7 +243,7 @@ class WaveEquationBaseModel(BaseModel):
         ninterior = self.get_labels("interior").shape[0]
 
         fig.suptitle(
-            f"ROM-PINN Model with artificial noise: {self.noise} nrom: {nrom} nint: {ninterior}"
+            f"ROM-PINN nrom: {nrom} nint: {ninterior}"
         )
         axs[0].set_title("Prediction")
         axs[1].set_title("Absolute Error")

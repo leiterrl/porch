@@ -67,7 +67,6 @@ def run_model(config: PorchConfig):
         config,
         config.wave_speed,
         boundary_conditions,
-        noise=0.0,
         nointerior=False,
     )
 
@@ -78,9 +77,9 @@ def run_model(config: PorchConfig):
     ## optimal pinn-rom weights
     if config.optimal_weighting:
         model.loss_weights = {
-            "interior": 2.2954030700590293e-06,
-            "rom": 0.5164989906081394,
-            "boundary": 0.4834987139887905,
+            "interior": 1.463186091733802e-05,
+            "rom": 0.666768040099405,
+            "boundary": 0.3332173280396778,
         }
     else:
         model.loss_weights = {
