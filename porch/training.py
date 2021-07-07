@@ -4,7 +4,9 @@ from .config import PorchConfig
 from .model import BaseModel
 import logging
 from tqdm import tqdm
-from tensorboardX import SummaryWriter
+
+# from tensorboardX import SummaryWriter
+from .util import CorrectedSummaryWriter as SummaryWriter
 import datetime
 import os
 
