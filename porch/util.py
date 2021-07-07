@@ -2,6 +2,28 @@ import torch
 from enum import Enum
 import numpy as np
 
+import os
+
+from torch.utils.tensorboard import SummaryWriter
+from torch.utils.tensorboard.summary import hparams
+
+# from tensorboardX.utils.tensorboard.summary import hparams
+# from tensorboardX import SummaryWriter
+
+
+class CorrectedSummaryWriter(SummaryWriter):
+    def add_hparams(self, hparam_dict, metric_dict):
+        torch._C._log_api_usage_once("tensorboard.logging.add_hparams")
+        if type(hparam_dict) is not dict or type(metric_dict) is not dict:
+            raise TypeError("hparam_dict and metric_dict should be dictionary.")
+        exp, ssi, sei = hparams(hparam_dict, metric_dict)
+
+        self.file_writer.add_summary(exp)
+        self.file_writer.add_summary(ssi)
+        self.file_writer.add_summary(sei)
+        for k, v in metric_dict.items():
+            self.add_scalar(k, v)
+
 
 # TODO: handle non-scalar case
 def gradient(y, x):
@@ -11,8 +33,10 @@ def gradient(y, x):
     )[0]
     return grad
 
+
 def hstack(tensor_tuple):
     return torch.cat(tensor_tuple, dim=1)
+
 
 def vstack(tensor_tuple):
     return torch.cat(tensor_tuple, dim=0)
@@ -58,3 +82,29 @@ def get_random_samples(bounds: torch.Tensor, n: int, device=None) -> torch.Tenso
         device=device,
         dtype=torch.float32,
     )
+
+
+def relative_l2_error(pred, truth):
+    """Relative l2 error as suggested in "Supplementary Material for Hidden
+    Fluid dynamics".
+
+        pred:   Predictions
+        truth:  Reference values
+
+        returns
+            Relative l2 error. If all truth values are zero, the absolute l2
+            error is returned.
+    """
+    if len(pred) > 0 and len(truth) > 0:
+        nominator = torch.mean(torch.square(pred - truth))
+        denominator = torch.mean(torch.square(truth - torch.mean(truth)))
+        if denominator > 0.0:
+            return nominator / denominator
+        else:
+            print(
+                "Warning: Cannot compute relative error since exact value is"
+                " constant, using absolute MSE instead"
+            )
+            return nominator
+    else:
+        return torch.tensor(0.0, device=pred.device)
