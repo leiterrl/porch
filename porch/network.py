@@ -125,5 +125,3 @@ def init_weights_trunc_normal_(m: torch.nn.Module) -> None:
     if type(m) == nn.Linear:
         if hasattr(m, "weight"):
             xavier_trunc_normal_(m.weight)
-    else:
-        raise RuntimeError("Can't initalize non-nn.Linear layer.")
