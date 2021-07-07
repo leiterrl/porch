@@ -266,3 +266,55 @@ class WaveEquationBaseModel(BaseModel):
 
         axs.legend()
         plt.savefig(f"plots/boundary_{name}.png")
+
+
+class WaveEquationExplicitDataModel(WaveEquationBaseModel):
+    def setup_data(self, n_boundary: int, n_interior: int, n_explicit: int):
+        bc_tensors = []
+        logging.info("Generating BC data...")
+        for bc in self.boundary_conditions:
+            bc_data = bc.get_samples(n_boundary, device=self.config.device)
+            bc_tensors.append(bc_data)
+        boundary_data = torch.cat(bc_tensors)
+
+        logging.info("Generating interior data...")
+        if not self.nointerior:
+            interior_data = self.geometry.get_random_samples(
+                n_interior, device=self.config.device
+            )
+            interior_labels = torch.zeros(
+                [interior_data.shape[0], 1],
+                device=self.config.device,
+                dtype=torch.float32,
+            )
+            interior_data = hstack([interior_data, interior_labels])
+
+        initial_input = self.data.get_input().to(device=self.config.device)[
+            0 : self.data.fom.num_intervals + 1, :
+        ]
+        ic_t_labels = torch.zeros(
+            [initial_input.shape[0], 1], device=self.config.device, dtype=torch.float32
+        )
+        ic_t_data = hstack([initial_input, ic_t_labels])
+
+        # Expliction solution data
+        X, u = self.data.get_explicit_solution_data(self.wave_speed)
+
+        # decrease dataset size
+        # rand_rows = torch.randperm(X.shape[0])[:n_explicit]
+        # X = X[rand_rows, :]
+        # u = u[rand_rows]
+
+        rom_data = hstack([X, u]).to(device=self.config.device)
+
+        dataset_dict = {
+            "interior": interior_data,
+            "boundary": boundary_data,
+            "rom": rom_data,
+            "ic_t": ic_t_data,
+        }
+        # if not self.nointerior:
+        # dataset_dict["interior"] = interior_data
+        complete_dataset = NamedTensorDataset(dataset_dict)
+
+        self.set_dataset(complete_dataset)
