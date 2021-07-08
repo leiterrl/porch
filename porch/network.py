@@ -70,6 +70,8 @@ class FullyConnected(nn.Module):
     ) -> None:
         super().__init__()
         layers = []
+        self.mean = None
+        self.std = None
 
         self.d_in = d_in
         self.d_out = d_out

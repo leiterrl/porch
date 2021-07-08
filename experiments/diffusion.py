@@ -15,6 +15,12 @@ from porch.util import gradient
 import matplotlib.pyplot as plt
 import numpy as np
 
+try:
+    from torch import hstack, vstack
+except ImportError:
+    from porch.util import hstack, vstack
+
+
 F = 0.5
 E = 0.5
 k = 2
@@ -91,7 +97,7 @@ class DiffusionModel(BaseModel):
         interior_labels = torch.zeros(
             [interior_data.shape[0], 1], device=self.config.device, dtype=torch.float32
         )
-        interior_data = torch.hstack([interior_data, interior_labels])
+        interior_data = hstack([interior_data, interior_labels])
 
         complete_dataset = NamedTensorDataset(
             {"boundary": boundary_data, "interior": interior_data}
@@ -110,12 +116,10 @@ class DiffusionModel(BaseModel):
         xx, tt = torch.meshgrid(x_linspace, t_linspace)
         z = P(xx, tt)
 
-        val_X = torch.hstack([xx.flatten().unsqueeze(-1), tt.flatten().unsqueeze(-1)])
+        val_X = hstack([xx.flatten().unsqueeze(-1), tt.flatten().unsqueeze(-1)])
         val_u = torch.as_tensor(z.flatten().unsqueeze(-1), dtype=torch.float32)
 
-        self.validation_data = torch.hstack([val_X, val_u]).to(
-            device=self.config.device
-        )
+        self.validation_data = hstack([val_X, val_u]).to(device=self.config.device)
 
     def plot_dataset(self) -> None:
         fig, axs = plt.subplots(1, 1, figsize=[12, 6])
@@ -196,7 +200,7 @@ def main(
     def ic_func(t_in):
         x_in_space = t_in[:, 0]
         t_in_space = t_in[:, 1]
-        z_in = torch.atleast_2d(P(x_in_space, t_in_space)).T
+        z_in = torch.unsqueeze(P(x_in_space, t_in_space), 1)
         return z_in
 
     ic_axis_definition = torch.Tensor([False, True])
