@@ -9,6 +9,7 @@ class PorchConfig:
     lr: float = 0.001
     optimizer_type: str = "adam"
     weight_norm: bool = False
+    normalize_input: bool = False
     lra: bool = False
     lra_alpha: float = 0.9
     optimal_weighting: bool = False

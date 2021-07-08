@@ -74,8 +74,6 @@ class FullyConnected(nn.Module):
         self.d_in = d_in
         self.d_out = d_out
 
-        # TODO: add input normalization
-
         # layers.append(NormLayer_WaveEq())
         if weight_normalization:
             print("Weight normalization enabled")
@@ -97,7 +95,13 @@ class FullyConnected(nn.Module):
         self.net = nn.Sequential(*layers)
         self.net.apply(init_weights_trunc_normal_)
 
+    def set_normalization(self, mean: torch.Tensor, std: torch.Tensor):
+        self.mean = mean
+        self.std = std
+
     def forward(self, model_input: torch.Tensor) -> torch.Tensor:
+        if self.mean is not None and self.std is not None:
+            model_input = (model_input - self.mean) / self.std
         return self.net(model_input)
 
 

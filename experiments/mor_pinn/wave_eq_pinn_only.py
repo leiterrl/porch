@@ -143,6 +143,15 @@ def run_model(config: PorchConfig):
     )
     network.to(device=config.device)
 
+    if config.normalize_input:
+        print("Input normalization enabled")
+        # TODO: don't hardcode mean values
+        # mean_t: 1.0, mean_x: 0.0
+        mean = torch.as_tensor([[1.0, 0.0]], device=config.device, dtype=torch.float32)
+        # not really standard deviation but rather domain size
+        std = torch.as_tensor([[2.0, 2.0]], device=config.device, dtype=torch.float32)
+        network.set_normalization(mean, std)
+
     geom = Geometry(torch.tensor([tlims, xlims]))
 
     data = DataWaveEquationZero()
@@ -205,7 +214,12 @@ def main():
         action="store_true",
         help="Use learning rate annealing",
     )
-
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=10000,
+        help="Set number of epochs",
+    )
     parser.add_argument(
         "--opt",
         action="store_true",
@@ -225,12 +239,13 @@ def main():
         device = torch.device("cpu")
 
     config = PorchConfig(device=device, lra=args.lra)
-    config.weight_norm = True
+    config.weight_norm = False
+    config.normalize_input = False
+    config.epochs = args.epochs
     config.wave_speed = 1.0
     config.n_boundary = args.nboundary
     config.n_interior = args.ninterior
     config.model_dir = "/import/sgs.local/scratch/leiterrl/wave_eq_pinn"
-    config.epochs = 10000
     config.n_neurons = n_neurons
     config.n_layers = n_layers
 
