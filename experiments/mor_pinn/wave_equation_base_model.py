@@ -43,7 +43,7 @@ class WaveEquationBaseModel(BaseModel):
         self.nointerior = nointerior
         super().__init__(network, geometry, config, boundary_conditions)
         self.wave_speed = wave_speed
-        self.data = DataWaveEquationZero()
+        self.data = DataWaveEquationZero(self.config.n_bases)
 
     # TODO: only spatial boundary
     def boundary_loss(self, loss_name):
@@ -167,8 +167,8 @@ class WaveEquationBaseModel(BaseModel):
 
         # Rom Data
 
-        X = self.data.get_input()
-        u = self.data.get_data_rom(self.wave_speed)
+        # X = self.data.get_input()
+        X, u = self.data.get_data_rom(self.wave_speed, self.config.subsample_rom)
 
         # decrease dataset size
         rand_rows = torch.randperm(X.shape[0])[:n_rom]
@@ -242,9 +242,7 @@ class WaveEquationBaseModel(BaseModel):
         nrom = self.get_labels("rom").shape[0]
         ninterior = self.get_labels("interior").shape[0]
 
-        fig.suptitle(
-            f"ROM-PINN nrom: {nrom} nint: {ninterior}"
-        )
+        fig.suptitle(f"ROM-PINN nrom: {nrom} nint: {ninterior}")
         axs[0].set_title("Prediction")
         axs[1].set_title("Absolute Error")
         axs[1].set_xlabel("$t$")

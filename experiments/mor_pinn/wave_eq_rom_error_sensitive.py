@@ -73,8 +73,8 @@ class WaveEquationErrorSensitive(WaveEquationBaseModel):
 
         # Rom Data
 
-        X = self.data.get_input()
-        u = self.data.get_data_rom(self.wave_speed)
+        # X = self.data.get_input()
+        X, u = self.data.get_data_rom(self.wave_speed, self.config.subsample_rom)
 
         rom_data = hstack([X, u]).to(device=self.config.device)
 
@@ -97,7 +97,7 @@ class WaveEquationErrorSensitive(WaveEquationBaseModel):
         prediction = self.network.forward(data_in)
 
         # unravel labels and prediction
-        domain_shape = (-1, self.data.fom.num_intervals + 1)
+        domain_shape = (-1, (self.data.fom.num_intervals + 1) // 6)
         labels_spatial = labels.reshape(domain_shape)
         prediction_spatial = prediction.reshape(domain_shape)
 
@@ -106,9 +106,12 @@ class WaveEquationErrorSensitive(WaveEquationBaseModel):
         )
 
         if self.heuristic:
-            l_d_2 = self.relu(loss_spatial - self.epsilon).pow(2)
+            l_d_2 = self.relu(loss_spatial - self.epsilon[::6, :]).pow(2)
         else:
-            l_d_2 = (2 * self.epsilon + self.relu(loss_spatial - self.epsilon)).pow(2)
+            l_d_2 = (
+                2 * self.epsilon[::6, :]
+                + self.relu(loss_spatial - self.epsilon[::6, :])
+            ).pow(2)
 
         l_d = (l_d_2).mean(dim=0, keepdim=True)
 
@@ -136,6 +139,7 @@ def main():
     parser.add_argument(
         "--nboundary", type=int, default=1000, help="Set number of rom data points"
     )
+    parser.add_argument("--nbases", type=int, default=2, help="Set number of rom bases")
     parser.add_argument(
         "--lra",
         action="store_true",
@@ -170,6 +174,7 @@ def main():
     config = PorchConfig(device=device, lra=args.lra)
     config.epochs = args.epochs
     config.optimal_weighting = args.opt
+    config.n_bases = args.nbases
 
     config.optimizer_type = "adam"
 
@@ -182,7 +187,7 @@ def main():
 
     geom = Geometry(torch.tensor([tlims, xlims]))
 
-    data = DataWaveEquationZero()
+    data = DataWaveEquationZero(config.n_bases)
     X_init, u_init = data.get_initial_cond_exact(wave_speed)
 
     initial_data = hstack([X_init, u_init])

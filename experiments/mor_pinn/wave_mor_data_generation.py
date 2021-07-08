@@ -27,12 +27,12 @@ class DataWaveEquationZero:
     Data generation for 1d wave eq model with 'zero' scenario
     """
 
-    def __init__(self):
+    def __init__(self, n_bases: int = 2):
         """
         Init rom
         """
         scenario = "zero"
-        rb_size = 4
+        rb_size = n_bases
         mus = [Parameter({"wave_speed": 1.0})]
         recompute_rom = False
 
@@ -179,18 +179,27 @@ class DataWaveEquationZero:
         input = self.get_input(subsample)
         expl_sol, _, _ = expl_sol_handle(wave_speed)
 
-        U = expl_sol(input[:, 1], input[:, 0])
+        U = expl_sol(input[:, 1], input[:, 0]).numpy()
 
         return input, torch.as_tensor(U.ravel()[..., np.newaxis], dtype=torch.float32)
 
-    def get_data_rom(self, wave_speed):
+    def get_data_rom(self, wave_speed, subsample: bool = False):
         """
         docstring
         """
         # mu = Parameter({"wave_speed": wave_speed})
         # u = self.rom.solve(mu=mu)
         # U_rom = self.reductor.reconstruct(u).to_numpy()
-        return torch.as_tensor(self.U_rom.ravel()[..., np.newaxis], dtype=torch.float32)
+        input = self.get_input(subsample)
+        if subsample:
+            subsampled_array = self.U_rom[::6, ::6]
+            return input, torch.as_tensor(
+                subsampled_array.ravel()[..., np.newaxis], dtype=torch.float32
+            )
+        else:
+            return input, torch.as_tensor(
+                self.U_rom.ravel()[..., np.newaxis], dtype=torch.float32
+            )
 
     def get_data_fom(self, wave_speed):
         """

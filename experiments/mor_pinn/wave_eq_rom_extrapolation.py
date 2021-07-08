@@ -42,8 +42,8 @@ class WaveEquationExtrapolation(WaveEquationBaseModel):
 
         # Rom Data
         data = DataWaveEquationZero()
-        X = data.get_input()
-        u = data.get_data_rom(self.wave_speed)
+        # X = data.get_input()
+        X, u = data.get_data_rom(self.wave_speed, self.config.subsample_rom)
 
         # decrease dataset size
         rand_rows = torch.randperm(X.shape[0])[:n_rom]

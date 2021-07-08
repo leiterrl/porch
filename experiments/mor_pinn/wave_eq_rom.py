@@ -39,7 +39,7 @@ def run_model(config: PorchConfig):
 
     geom = Geometry(torch.tensor([tlims, xlims]))
 
-    data = DataWaveEquationZero()
+    data = DataWaveEquationZero(config.n_bases)
     X_init, u_init = data.get_initial_cond_exact(config.wave_speed)
     # decrease initial condition dataset size
     # rand_rows = torch.randperm(X_init.shape[0])[:n_boundary]
@@ -129,6 +129,7 @@ def main():
     parser.add_argument(
         "--nboundary", type=int, default=1000, help="Set number of rom data points"
     )
+    parser.add_argument("--nbases", type=int, default=2, help="Set number of rom bases")
     parser.add_argument(
         "--nointerior",
         # default=False,
@@ -137,6 +138,11 @@ def main():
     )
     parser.add_argument(
         "--lra",
+        action="store_true",
+        help="Use learning rate annealing",
+    )
+    parser.add_argument(
+        "--opt",
         action="store_true",
         help="Use learning rate annealing",
     )
@@ -161,6 +167,8 @@ def main():
     config.n_boundary = args.nboundary
     config.n_interior = args.ninterior
     config.n_rom = args.nrom
+    config.optimal_weighting = args.opt
+    config.n_bases = args.nbases
 
     config.epochs = args.epochs
     if args.lbfgs:
