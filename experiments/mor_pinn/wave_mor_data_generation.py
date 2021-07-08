@@ -8,6 +8,19 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import logging
 import numpy as np
 
+from pymor.core.logger import set_log_levels
+
+set_log_levels(
+    {
+        "pymor.algorithms.pod": "ERROR",
+        "pymor.algorithms.image.estimate_image_hierarchical": "ERROR",
+        "pymor.algorithms.svd_va": "ERROR",
+        "pymor.reductors.wave_so": "ERROR",
+        "pymor.reductors.residual": "ERROR",
+        "pymor.algorithms.gram_schmidt.gram_schmidt": "ERROR",
+    }
+)
+
 # from experiments.mor_pinn.wave_mor_utils import (
 from pymordemos.mor_reproduction_wave_so import (
     generate_fom,
