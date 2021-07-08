@@ -4,15 +4,14 @@ from porch.boundary_conditions import BoundaryCondition
 
 from porch.dataset import NamedTensorDataset
 from experiments.mor_pinn.wave_mor_data_generation import DataWaveEquationZero
+from experiments.mor_pinn.wave_equation_base_model import WaveEquationBaseModel
 
 
 import torch
 import argparse
 from porch.config import PorchConfig
 from porch.geometry import Geometry
-from porch.model import BaseModel
 from porch.network import FullyConnected
-from porch.util import gradient
 from porch.boundary_conditions import DirichletBC, DiscreteBC
 from porch.training import Trainer
 
@@ -28,61 +27,9 @@ sns.set_theme(style="white", palette="mako")
 sns.color_palette("mako", as_cmap=True)
 
 
-class WaveEquationPINN(BaseModel):
-    def __init__(
-        self,
-        network: FullyConnected,
-        geometry: Geometry,
-        config: PorchConfig,
-        wave_speed: float,
-        boundary_conditions: "list[BoundaryCondition]",
-    ):
-        super().__init__(network, geometry, config, boundary_conditions)
-        self.data = DataWaveEquationZero()
-        self.wave_speed = wave_speed
-
-    # # TODO: only spatial boundary
-    def boundary_loss(self, loss_name):
-        """u(x=lb,t) = u(x=ub,t) = 0"""
-        data_in = self.get_input(loss_name)
-        labels = self.get_labels(loss_name)
-        prediction = self.network.forward(data_in)
-
-        return torch.pow(prediction - labels, 2)
-
-    # TODO: complete ic (u and u_t)
-    def ic_loss(self, loss_name):
-        """u_t(x,t=0) = 0"""
-        data_in = self.get_input(loss_name)
-        labels = self.get_labels(loss_name)
-        prediction = self.network.forward(data_in)
-
-        grad_u = gradient(prediction, data_in)
-        u_t = grad_u[..., 0]
-
-        return torch.pow(u_t - labels, 2)
-
-    def interior_loss(self, loss_name):
-        """u_tt - \\mu² * u_xx = 0"""
-        data_in = self.get_input(loss_name)
-        if len(data_in) == 0:
-            return torch.tensor([], device=self.device)
-        labels = self.get_labels(loss_name)
-        prediction = self.network.forward(data_in)
-
-        grad_u = gradient(prediction, data_in)
-        u_x = grad_u[..., 1]
-        u_t = grad_u[..., 0]
-
-        grad_u_x = gradient(u_x, data_in)
-        u_xx = grad_u_x[..., 1]
-
-        grad_u_t = gradient(u_t, data_in)
-        u_tt = grad_u_t[..., 0]
-
-        f = u_tt - self.wave_speed ** 2 * u_xx
-
-        return torch.pow(f - labels, 2)
+class WaveEquationPINN(WaveEquationBaseModel):
+    def rom_loss(self, loss_name):
+        raise NotImplementedError("This should not be called on PINN only Model")
 
     def setup_losses(self):
         self.losses = {
@@ -129,15 +76,11 @@ class WaveEquationPINN(BaseModel):
 
         self.set_dataset(complete_dataset)
 
-    def setup_validation_data(self) -> None:
-        val_X, val_u = self.data.get_explicit_solution_data(self.wave_speed)
-        self.validation_data = hstack([val_X, val_u]).to(device=self.config.device)
-
     def plot_validation(self):
         validation_in = self.validation_data[:, : self.network.d_in]
         validation_labels = self.validation_data[:, -self.network.d_out :]
 
-        domain_shape = (-1, self.data.fom.num_intervals + 1)
+        domain_shape = (-1, (self.data.fom.num_intervals + 1) // 6)
         # TODO simplify by flattening
         domain_extent = self.geometry.limits.flatten()
         sns.color_palette("mako", as_cmap=True)
@@ -188,26 +131,6 @@ class WaveEquationPINN(BaseModel):
         axs[0].set_ylabel("$x$")
         axs[1].set_ylabel("$x$")
         return fig
-
-    def plot_dataset(self, name: str) -> None:
-        fig, axs = plt.subplots(1, 1, figsize=[12, 6])
-        for name in self.get_data_names():
-            data_in = self.get_input(name).cpu().numpy()
-            axs.scatter(data_in[:, 0], data_in[:, 1], label=name, alpha=0.5)
-
-        axs.legend(loc="upper right")
-        plt.savefig(f"plots/dataset_{name}.png")
-
-    def plot_boundary_data(self, name: str) -> None:
-        fig, axs = plt.subplots(1, 1, figsize=[12, 6])
-
-        data_in = self.get_input("boundary").cpu().numpy()
-        labels = self.get_labels("boundary").cpu().numpy()
-
-        axs.scatter(data_in[:, 0], data_in[:, 1], c=labels, label="boundary", alpha=0.5)
-
-        axs.legend()
-        plt.savefig(f"plots/boundary_{name}.png")
 
 
 def run_model(config: PorchConfig):
