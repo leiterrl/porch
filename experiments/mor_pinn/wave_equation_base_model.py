@@ -38,9 +38,7 @@ class WaveEquationBaseModel(BaseModel):
         config: PorchConfig,
         wave_speed: float,
         boundary_conditions: "list[BoundaryCondition]",
-        nointerior: bool = False,
     ):
-        self.nointerior = nointerior
         super().__init__(network, geometry, config, boundary_conditions)
         self.wave_speed = wave_speed
         self.data = DataWaveEquationZero(self.config.n_bases)
@@ -146,16 +144,16 @@ class WaveEquationBaseModel(BaseModel):
         boundary_data = torch.cat(bc_tensors)
 
         logging.info("Generating interior data...")
-        if not self.nointerior:
-            interior_data = self.geometry.get_random_samples(
-                n_interior, device=self.config.device
-            )
-            interior_labels = torch.zeros(
-                [interior_data.shape[0], 1],
-                device=self.config.device,
-                dtype=torch.float32,
-            )
-            interior_data = hstack([interior_data, interior_labels])
+
+        interior_data = self.geometry.get_random_samples(
+            n_interior, device=self.config.device
+        )
+        interior_labels = torch.zeros(
+            [interior_data.shape[0], 1],
+            device=self.config.device,
+            dtype=torch.float32,
+        )
+        interior_data = hstack([interior_data, interior_labels])
 
         initial_input = self.data.get_input().to(device=self.config.device)[
             0 : self.data.fom.num_intervals + 1, :
