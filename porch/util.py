@@ -1,8 +1,7 @@
 import torch
 from enum import Enum
 import numpy as np
-
-import os
+import argparse
 
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.tensorboard.summary import hparams
@@ -108,3 +107,57 @@ def relative_l2_error(pred, truth):
             return nominator
     else:
         return torch.tensor(0.0, device=pred.device)
+
+
+def parse_args():
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "--ninterior",
+        type=int,
+        default=10000,
+        help="Set number of interior collocation points",
+    )
+    parser.add_argument(
+        "--nboundary", type=int, default=1000, help="Set number of boundary data points"
+    )
+    parser.add_argument(
+        "--nrom", type=int, default=10000, help="Set number of rom data points"
+    )
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=10000,
+        help="Set number of epochs",
+    )
+    parser.add_argument(
+        "--lra",
+        action="store_true",
+        help="Use learning rate annealing",
+    )
+    parser.add_argument(
+        "--opt",
+        action="store_true",
+        help="Use optimal weighting",
+    )
+    parser.add_argument(
+        "--determ",
+        action="store_true",
+        help="Use deterministic init",
+    )
+    parser.add_argument("--nbases", type=int, default=2, help="Set number of rom bases")
+    parser.add_argument(
+        "--lbfgs",
+        action="store_true",
+        help="Use learning rate annealing",
+    )
+    parser.add_argument(
+        "--heuristic",
+        action="store_true",
+        help="Use heuristic approach",
+    )
+
+    args = parser.parse_args()
+
+    return args
