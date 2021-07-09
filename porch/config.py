@@ -31,6 +31,7 @@ class PorchConfig:
     model_dir: str = "./run"
 
     subsample_rom = True
+    deterministic = False
 
     def __post__init(self):
         if self.lra and self.optimal_weighting:
