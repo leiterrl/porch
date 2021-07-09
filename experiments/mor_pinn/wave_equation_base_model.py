@@ -181,8 +181,6 @@ class WaveEquationBaseModel(BaseModel):
             "rom": rom_data,
             "ic_t": ic_t_data,
         }
-        # if not self.nointerior:
-        # dataset_dict["interior"] = interior_data
         complete_dataset = NamedTensorDataset(dataset_dict)
 
         self.set_dataset(complete_dataset)
@@ -281,16 +279,15 @@ class WaveEquationExplicitDataModel(WaveEquationBaseModel):
         boundary_data = torch.cat(bc_tensors)
 
         logging.info("Generating interior data...")
-        if not self.nointerior:
-            interior_data = self.geometry.get_random_samples(
-                n_interior, device=self.config.device
-            )
-            interior_labels = torch.zeros(
-                [interior_data.shape[0], 1],
-                device=self.config.device,
-                dtype=torch.float32,
-            )
-            interior_data = hstack([interior_data, interior_labels])
+        interior_data = self.geometry.get_random_samples(
+            n_interior, device=self.config.device
+        )
+        interior_labels = torch.zeros(
+            [interior_data.shape[0], 1],
+            device=self.config.device,
+            dtype=torch.float32,
+        )
+        interior_data = hstack([interior_data, interior_labels])
 
         initial_input = self.data.get_input().to(device=self.config.device)[
             0 : self.data.fom.num_intervals + 1, :
@@ -316,8 +313,6 @@ class WaveEquationExplicitDataModel(WaveEquationBaseModel):
             "rom": rom_data,
             "ic_t": ic_t_data,
         }
-        # if not self.nointerior:
-        # dataset_dict["interior"] = interior_data
         complete_dataset = NamedTensorDataset(dataset_dict)
 
         self.set_dataset(complete_dataset)

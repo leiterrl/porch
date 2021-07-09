@@ -1,4 +1,9 @@
-from torch._C import device
+import numpy as np
+import torch
+import random
+
+seed = 0
+
 from porch.boundary_conditions import BoundaryCondition, DirichletBC, DiscreteBC
 from porch.training import Trainer
 from porch.dataset import NamedTensorDataset
@@ -10,12 +15,11 @@ from experiments.mor_pinn.wave_mor_data_generation import DataWaveEquationZero
 from experiments.mor_pinn.wave_equation_base_model import WaveEquationBaseModel
 import argparse
 
-import torch
-
 from porch.config import PorchConfig
 from porch.geometry import Geometry
 
 from porch.network import FullyConnected
+from porch.util import parse_args
 
 try:
     from torch import hstack, vstack
@@ -52,16 +56,15 @@ class WaveEquationErrorSensitive(WaveEquationBaseModel):
         boundary_data = torch.cat(bc_tensors)
 
         logging.info("Generating interior data...")
-        if not self.nointerior:
-            interior_data = self.geometry.get_random_samples(
-                n_interior, device=self.config.device
-            )
-            interior_labels = torch.zeros(
-                [interior_data.shape[0], 1],
-                device=self.config.device,
-                dtype=torch.float32,
-            )
-            interior_data = hstack([interior_data, interior_labels])
+        interior_data = self.geometry.get_random_samples(
+            n_interior, device=self.config.device
+        )
+        interior_labels = torch.zeros(
+            [interior_data.shape[0], 1],
+            device=self.config.device,
+            dtype=torch.float32,
+        )
+        interior_data = hstack([interior_data, interior_labels])
 
         initial_input = self.data.get_input().to(device=self.config.device)[
             0 : self.data.fom.num_intervals + 1, :
@@ -120,42 +123,13 @@ class WaveEquationErrorSensitive(WaveEquationBaseModel):
 
 def main():
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--ninterior",
-        type=int,
-        default=10000,
-        help="Set number of interior collocation points",
-    )
-    parser.add_argument(
-        "--epochs",
-        type=int,
-        default=10000,
-        help="Set number of epochs",
-    )
-    # parser.add_argument(
-    #     "--nrom", type=int, default=10000, help="Set number of rom data points"
-    # )
-    parser.add_argument(
-        "--nboundary", type=int, default=1000, help="Set number of rom data points"
-    )
-    parser.add_argument("--nbases", type=int, default=2, help="Set number of rom bases")
-    parser.add_argument(
-        "--lra",
-        action="store_true",
-        help="Use learning rate annealing",
-    )
-    parser.add_argument(
-        "--heuristic",
-        action="store_true",
-        help="Use heuristic approach",
-    )
-    parser.add_argument(
-        "--opt",
-        action="store_true",
-        help="Use optimal weighting",
-    )
-    args = parser.parse_args()
+    args = parse_args()
+
+    if args.determ:
+        torch.manual_seed(seed)
+        # torch.use_deterministic_algorithms(True)
+        random.seed(seed)
+        np.random.seed(0)
 
     model_dir = "/import/sgs.local/scratch/leiterrl/wave_eq_rom_error_sensitive"
     num_layers = 5
@@ -172,6 +146,7 @@ def main():
         device = torch.device("cpu")
 
     config = PorchConfig(device=device, lra=args.lra)
+    config.deterministic = args.determ
     config.epochs = args.epochs
     config.optimal_weighting = args.opt
     config.n_bases = args.nbases
@@ -181,9 +156,14 @@ def main():
     xlims = (-1.0, 1.0)
     tlims = (0.0, 2.0)
 
-    # 2D in (x,t) -> u 1D out
-    network = FullyConnected(2, 1, num_layers, num_neurons, weight_norm)
-    network.to(device=device)
+    if config.deterministic:
+        network = torch.load("./cache/model.pth")
+    else:
+        network = FullyConnected(
+            2, 1, config.n_layers, config.n_neurons, config.weight_norm
+        )
+        torch.save(network, "./cache/model.pth", _use_new_zipfile_serialization=False)
+    network.to(device=config.device)
 
     geom = Geometry(torch.tensor([tlims, xlims]))
 

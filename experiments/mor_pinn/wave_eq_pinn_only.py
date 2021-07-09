@@ -1,4 +1,10 @@
 import numpy as np
+import torch
+import random
+
+seed = 0
+
+
 import logging
 from porch.boundary_conditions import BoundaryCondition
 
@@ -7,13 +13,13 @@ from experiments.mor_pinn.wave_mor_data_generation import DataWaveEquationZero
 from experiments.mor_pinn.wave_equation_base_model import WaveEquationBaseModel
 
 
-import torch
 import argparse
 from porch.config import PorchConfig
 from porch.geometry import Geometry
 from porch.network import FullyConnected
 from porch.boundary_conditions import DirichletBC, DiscreteBC
 from porch.training import Trainer
+from porch.util import parse_args
 
 try:
     from torch import hstack, vstack
@@ -138,9 +144,13 @@ def run_model(config: PorchConfig):
     tlims = (0.0, 2.0)
 
     # 2D in (x,t) -> u 1D out
-    network = FullyConnected(
-        2, 1, config.n_layers, config.n_neurons, config.weight_norm
-    )
+    if config.deterministic:
+        network = torch.load("./cache/model.pth")
+    else:
+        network = FullyConnected(
+            2, 1, config.n_layers, config.n_neurons, config.weight_norm
+        )
+        torch.save(network, "./cache/model.pth", _use_new_zipfile_serialization=False)
     network.to(device=config.device)
 
     if config.normalize_input:
@@ -196,36 +206,14 @@ def run_model(config: PorchConfig):
 
 
 def main():
-    parser = argparse.ArgumentParser()
 
-    parser.add_argument(
-        "--ninterior",
-        type=int,
-        default=10000,
-        help="Set number of interior collocation points",
-    )
+    args = parse_args()
 
-    parser.add_argument(
-        "--nboundary", type=int, default=1000, help="Set number of boundary data points"
-    )
-
-    parser.add_argument(
-        "--lra",
-        action="store_true",
-        help="Use learning rate annealing",
-    )
-    parser.add_argument(
-        "--epochs",
-        type=int,
-        default=10000,
-        help="Set number of epochs",
-    )
-    parser.add_argument(
-        "--opt",
-        action="store_true",
-        help="Use optimal weighting",
-    )
-    args = parser.parse_args()
+    if args.determ:
+        torch.manual_seed(seed)
+        # torch.use_deterministic_algorithms(True)
+        random.seed(seed)
+        np.random.seed(0)
 
     n_layers = 5
     n_neurons = 20
@@ -248,6 +236,7 @@ def main():
     config.model_dir = "/import/sgs.local/scratch/leiterrl/wave_eq_pinn"
     config.n_neurons = n_neurons
     config.n_layers = n_layers
+    config.deterministic = args.determ
 
     run_model(config)
 

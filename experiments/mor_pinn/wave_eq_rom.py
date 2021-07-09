@@ -1,3 +1,9 @@
+import numpy as np
+import torch
+import random
+
+seed = 0
+
 from porch.boundary_conditions import BoundaryCondition, DirichletBC, DiscreteBC
 from porch.training import Trainer
 
@@ -11,13 +17,13 @@ import argparse
 # logger = logging.getLogger(__name__)
 # logger.setLevel(5)
 
-import torch
 
 from porch.config import PorchConfig
 from porch.geometry import Geometry
 
 from porch.network import FullyConnected
 from porch.util import hstack
+from porch.util import parse_args
 
 
 import seaborn as sns
@@ -31,10 +37,13 @@ def run_model(config: PorchConfig):
     xlims = (-1.0, 1.0)
     tlims = (0.0, 2.0)
 
-    # 2D in (x,t) -> u 1D out
-    network = FullyConnected(
-        2, 1, config.n_layers, config.n_neurons, config.weight_norm
-    )
+    if config.deterministic:
+        network = torch.load("./cache/model.pth")
+    else:
+        network = FullyConnected(
+            2, 1, config.n_layers, config.n_neurons, config.weight_norm
+        )
+        torch.save(network, "./cache/model.pth", _use_new_zipfile_serialization=False)
     network.to(device=config.device)
 
     geom = Geometry(torch.tensor([tlims, xlims]))
@@ -64,7 +73,6 @@ def run_model(config: PorchConfig):
         config,
         config.wave_speed,
         boundary_conditions,
-        nointerior=False,
     )
 
     # model.loss_weights["boundary"] = 10.0
@@ -110,48 +118,14 @@ def run_model(config: PorchConfig):
 
 def main():
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--ninterior",
-        type=int,
-        default=10000,
-        help="Set number of interior collocation points",
-    )
-    parser.add_argument(
-        "--epochs",
-        type=int,
-        default=10000,
-        help="Set number of epochs",
-    )
-    parser.add_argument(
-        "--nrom", type=int, default=10000, help="Set number of rom data points"
-    )
-    parser.add_argument(
-        "--nboundary", type=int, default=1000, help="Set number of rom data points"
-    )
-    parser.add_argument("--nbases", type=int, default=2, help="Set number of rom bases")
-    parser.add_argument(
-        "--nointerior",
-        # default=False,
-        action="store_true",
-        help="Set artificial noise value for ROM",
-    )
-    parser.add_argument(
-        "--lra",
-        action="store_true",
-        help="Use learning rate annealing",
-    )
-    parser.add_argument(
-        "--opt",
-        action="store_true",
-        help="Use learning rate annealing",
-    )
-    parser.add_argument(
-        "--lbfgs",
-        action="store_true",
-        help="Use learning rate annealing",
-    )
-    args = parser.parse_args()
+    args = parse_args()
+
+    if args.determ:
+        torch.manual_seed(seed)
+        # torch.use_deterministic_algorithms(True)
+        random.seed(seed)
+        np.random.seed(0)
+
     if torch.cuda.is_available():
         device = torch.device("cuda")
     else:
@@ -169,6 +143,7 @@ def main():
     config.n_rom = args.nrom
     config.optimal_weighting = args.opt
     config.n_bases = args.nbases
+    config.deterministic = args.determ
 
     config.epochs = args.epochs
     if args.lbfgs:
