@@ -56,7 +56,7 @@ class Trainer:
 
     def train_epoch(self):
 
-        if self.config.lra:
+        if self.config.lra and self.epoch % 10 == 0:
             self.optimizer.zero_grad()
             losses = self.model.compute_losses_unweighted()
             loss_grads = {}
