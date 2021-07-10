@@ -45,6 +45,8 @@ class DiffusionModel(BaseModel):
     def boundary_loss(self, loss_name) -> torch.Tensor:
         """u(x=lb,t) = u(x=ub,t) = 0"""
         data_in = self.get_input(loss_name)
+        if len(data_in) == 0:
+            return torch.zeros([1] + list(data_in.shape)[1:], device=self.config.device)
         labels = self.get_labels(loss_name)
         prediction = self.network.forward(data_in)
 
@@ -54,6 +56,8 @@ class DiffusionModel(BaseModel):
     def ic_loss(self, loss_name) -> torch.Tensor:
         """u_t(x,t=0) = 0"""
         data_in = self.get_input(loss_name)
+        if len(data_in) == 0:
+            return torch.zeros([1] + list(data_in.shape)[1:], device=self.config.device)
         labels = self.get_labels(loss_name)
         prediction = self.network.forward(data_in)
 
@@ -62,6 +66,8 @@ class DiffusionModel(BaseModel):
     def interior_loss(self, loss_name) -> torch.Tensor:
 
         data_in = self.get_input(loss_name)
+        if len(data_in) == 0:
+            return torch.zeros([1] + list(data_in.shape)[1:], device=self.config.device)
         labels = self.get_labels(loss_name)
         prediction = self.network.forward(data_in)
 
@@ -83,6 +89,8 @@ class DiffusionModel(BaseModel):
         self.losses = {"boundary": self.boundary_loss, "interior": self.interior_loss}
 
     def setup_data(self, n_boundary: int, n_interior: int) -> None:
+        # spread n_boudary evenly over all boundaries (including initial condition)
+        n_boundary = n_boundary // (len(self.boundary_conditions) + 1)
         bc_tensors = []
         logging.info("Generating BC data...")
         for bc in self.boundary_conditions:

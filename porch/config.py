@@ -28,6 +28,10 @@ class PorchConfig:
     n_rom: int = 10000
     n_bases: int = 2
 
+    batch_size: int = 0
+    batch_shuffle: bool = True
+    batch_cycle: bool = False
+
     model_dir: str = "./run"
 
     subsample_rom = True

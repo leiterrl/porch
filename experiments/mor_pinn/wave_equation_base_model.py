@@ -47,6 +47,8 @@ class WaveEquationBaseModel(BaseModel):
     def boundary_loss(self, loss_name):
         """u(x=lb,t) = u(x=ub,t) = 0"""
         data_in = self.get_input(loss_name)
+        if len(data_in) == 0:
+            return torch.zeros([1] + list(data_in.shape)[1:], device=self.config.device)
         labels = self.get_labels(loss_name)
         prediction = self.network.forward(data_in)
 
@@ -66,6 +68,8 @@ class WaveEquationBaseModel(BaseModel):
     def ic_loss(self, loss_name):
         """u_t(x,t=0) = 0"""
         data_in = self.get_input(loss_name)
+        if len(data_in) == 0:
+            return torch.zeros([1] + list(data_in.shape)[1:], device=self.config.device)
         labels = self.get_labels(loss_name)
         prediction = self.network.forward(data_in)
 
@@ -84,7 +88,7 @@ class WaveEquationBaseModel(BaseModel):
         """u_tt - \\mu² * u_xx = 0"""
         data_in = self.get_input(loss_name)
         if len(data_in) == 0:
-            return torch.tensor([], device=self.device)
+            return torch.zeros([1] + list(data_in.shape)[1:], device=self.config.device)
         labels = self.get_labels(loss_name)
         prediction = self.network.forward(data_in)
 
@@ -120,6 +124,8 @@ class WaveEquationBaseModel(BaseModel):
 
     def rom_loss(self, loss_name):
         data_in = self.get_input(loss_name)
+        if len(data_in) == 0:
+            return torch.zeros([1] + list(data_in.shape)[1:], device=self.config.device)
         labels = self.get_labels(loss_name)
         prediction = self.network.forward(data_in)
 
@@ -136,6 +142,8 @@ class WaveEquationBaseModel(BaseModel):
         }
 
     def setup_data(self, n_boundary: int, n_interior: int, n_rom: int):
+        # spread n_boudary evenly over all boundaries (including initial condition)
+        n_boundary = n_boundary // (len(self.boundary_conditions) + 1)
         bc_tensors = []
         logging.info("Generating BC data...")
         for bc in self.boundary_conditions:
@@ -158,6 +166,15 @@ class WaveEquationBaseModel(BaseModel):
         initial_input = self.data.get_input().to(device=self.config.device)[
             0 : self.data.fom.num_intervals + 1, :
         ]
+        # downsample, TODO: this should be done in a more unified way, i guess
+        len_data = len(initial_input)
+        if n_boundary < len_data:
+            sampling_points = torch.linspace(0, len_data-1, n_boundary, dtype=int)
+            initial_input = initial_input[sampling_points]
+        elif n_boundary == len_data:
+            pass
+        else:
+            raise ValueError('Cannot generate n_sample={} from data of len: {}'.format(n_boundary, len_data))    
         ic_t_labels = torch.zeros(
             [initial_input.shape[0], 1], device=self.config.device, dtype=torch.float32
         )
@@ -273,6 +290,8 @@ class WaveEquationBaseModel(BaseModel):
 
 class WaveEquationExplicitDataModel(WaveEquationBaseModel):
     def setup_data(self, n_boundary: int, n_interior: int, n_explicit: int):
+        # spread n_boudary evenly over all boundaries (including initial condition)
+        n_boundary = n_boundary // (len(self.boundary_conditions) + 1)
         bc_tensors = []
         logging.info("Generating BC data...")
         for bc in self.boundary_conditions:
@@ -295,6 +314,15 @@ class WaveEquationExplicitDataModel(WaveEquationBaseModel):
         initial_input = self.data.get_input().to(device=self.config.device)[
             0 : self.data.fom.num_intervals + 1, :
         ]
+        # downsample, TODO: this should be done in a more unified way, i guess
+        len_data = len(initial_input)
+        if n_boundary < len_data:
+            sampling_points = torch.linspace(0, len_data-1, n_boundary, dtype=int)
+            initial_input = initial_input[sampling_points]
+        elif n_boundary == len_data:
+            pass
+        else:
+            raise ValueError('Cannot generate n_sample={} from data of len: {}'.format(n_boundary, len_data))   
         ic_t_labels = torch.zeros(
             [initial_input.shape[0], 1], device=self.config.device, dtype=torch.float32
         )

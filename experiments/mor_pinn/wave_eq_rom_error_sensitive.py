@@ -44,6 +44,8 @@ class WaveEquationErrorSensitive(WaveEquationBaseModel):
         self.heuristic = heuristic
 
     def setup_data(self, n_boundary: int, n_interior: int):
+        # spread n_boudary evenly over all boundaries (including initial condition)
+        n_boundary = n_boundary // (len(self.boundary_conditions) + 1)
         bc_tensors = []
         logging.info("Generating BC data...")
         for bc in self.boundary_conditions:
@@ -66,6 +68,15 @@ class WaveEquationErrorSensitive(WaveEquationBaseModel):
         initial_input = self.data.get_input().to(device=self.config.device)[
             0 : self.data.fom.num_intervals + 1, :
         ]
+        # downsample, TODO: this should be done in a more unified way, i guess
+        len_data = len(initial_input)
+        if n_boundary < len_data:
+            sampling_points = torch.linspace(0, len_data-1, n_boundary, dtype=int)
+            initial_input = initial_input[sampling_points]
+        elif n_boundary == len_data:
+            pass
+        else:
+            raise ValueError('Cannot generate n_sample={} from data of len: {}'.format(n_boundary, len_data))    
         ic_t_labels = torch.zeros(
             [initial_input.shape[0], 1], device=self.config.device, dtype=torch.float32
         )
@@ -93,6 +104,8 @@ class WaveEquationErrorSensitive(WaveEquationBaseModel):
 
     def rom_loss(self, loss_name):
         data_in = self.get_input(loss_name)
+        if len(data_in) == 0:
+            return torch.zeros([1] + list(data_in.shape)[1:], device=self.config.device)
         labels = self.get_labels(loss_name)
         prediction = self.network.forward(data_in)
 
