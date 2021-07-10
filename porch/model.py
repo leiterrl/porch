@@ -1,5 +1,5 @@
 from .network import FullyConnected
-from .dataset import NamedTensorDataset
+from .dataset import BatchedNamedTensorDataset, NamedTensorDataset
 from .config import PorchConfig
 from .geometry import Geometry
 from .boundary_conditions import BoundaryCondition
@@ -75,8 +75,18 @@ class BaseModel:
                 raise RuntimeError(
                     f"Dataset {name} column number has to equal d_in + d_out."
                 )
+        
+        # enable mini batching
+        if self.config.batch_size > 0:
+            assert not self.config.optimizer_type == 'lbfgs', 'mini-batching and lbfgs are incompatible'
+            dataset = BatchedNamedTensorDataset.from_named_tensor_dataset(
+                dataset,
+                self.config.batch_size,
+                self.config.batch_shuffle,
+                self.config.batch_cycle,
+            )
 
-        self.dataset = dataset._dataset
+        self.dataset = dataset
 
     def compute_validation_error(self):
         validation_in = self.validation_data[:, : self.network.d_in]
@@ -91,3 +101,21 @@ class BaseModel:
 
     def set_boundary_conditions(self, boundary_conditions: "list[BoundaryCondition]"):
         self.boundary_conditions = boundary_conditions
+
+    def get_number_of_batches(self) -> int:
+        if hasattr(self.dataset, 'get_number_of_batches'):
+            return self.dataset.get_number_of_batches()
+        else: 
+            return 1
+    
+    def init_training_step(self) -> None:
+        if isinstance(self.dataset, BatchedNamedTensorDataset):
+            # reset iterators
+            self.dataset.reset_iters()
+            # first step, to initialze current_dataset
+            self.dataset.step()
+    
+    #TODO: alternatively, a callback to step the dataset might be added to a list of callbacks executed during training
+    def training_step(self) -> None:
+        if hasattr(self.dataset, 'step'):
+            self.dataset.step()

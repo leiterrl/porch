@@ -20,6 +20,8 @@ sns.color_palette("mako", as_cmap=True)
 
 class WaveEquationExtrapolation(WaveEquationBaseModel):
     def setup_data(self, n_boundary: int, n_interior: int, n_rom: int):
+        # spread n_boudary evenly over all boundaries (including initial condition)
+        n_boundary = n_boundary // (len(self.boundary_conditions) + 1)
         bc_tensors = []
         logging.info("Generating BC data...")
         for bc in self.boundary_conditions:
