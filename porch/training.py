@@ -43,6 +43,7 @@ class Trainer:
         timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         self.writer = SummaryWriter(self.model_dir + "_" + timestamp, flush_secs=10)
         self.epoch = 0
+        self.iteration = 0
         self.total_loss = torch.tensor([0.0])
 
     @staticmethod
@@ -56,7 +57,7 @@ class Trainer:
 
     def train_epoch(self):
 
-        if self.config.lra and self.epoch % 10 == 0:
+        if self.config.lra and self.iteration % 10 == 0 and self.iteration > 1:
             self.optimizer.zero_grad()
             losses = self.model.compute_losses_unweighted()
             loss_grads = {}
@@ -92,7 +93,9 @@ class Trainer:
                     loss_mean = loss.mean()
                     self.writer.add_scalar("training/" + name, loss_mean, self.epoch)
                     closure_loss += loss_mean
-                self.writer.add_scalar("training/total_loss", closure_loss.item(), self.epoch)
+                self.writer.add_scalar(
+                    "training/total_loss", closure_loss.item(), self.epoch
+                )
                 if self.epoch % self.config.print_freq == 0:
                     self.postfix_dict["loss"] = format(closure_loss.item(), ".3e")
 
@@ -107,7 +110,7 @@ class Trainer:
             self.model.init_training_step()
             # cycle batches
             mean_over_batches_losses = dict()
-            mean_over_batch_total_loss = 0.
+            mean_over_batch_total_loss = 0.0
             for _ in range(num_batches):
                 self.optimizer.zero_grad()
                 losses = self.model.compute_losses()
@@ -126,13 +129,34 @@ class Trainer:
                 total_loss.backward()
                 self.optimizer.step()
                 self.model.training_step()
+                self.iteration += 1
+                self.update_progress()
+
+                if self.iteration % self.config.print_freq == 0:
+                    val_error = self.model.compute_validation_error()
+                    self.writer.add_scalar(
+                        "validating/validation_error", val_error, self.iteration
+                    )
+                    self.postfix_dict["val"] = format(val_error, ".3e")
+                    self.progress_bar.set_postfix(self.postfix_dict)
+
+                if self.iteration % self.config.summary_freq == 0:
+                    fig = self.model.plot_validation()
+                    self.writer.add_figure("Prediction", fig, self.iteration)
+                    self.writer.flush()
 
             for name, mob_loss in mean_over_batches_losses.items():
-                if self.epoch % self.config.print_freq == 0:
-                    #TODO: dividing by the num_batches will be bad, if it has many zero contributions due to inconsistent data sizes
-                    self.writer.add_scalar("training/" + name, mob_loss / num_batches, self.epoch)
-            if self.epoch % self.config.print_freq == 0:
-                self.writer.add_scalar("training/total_loss", mean_over_batch_total_loss / num_batches, self.epoch)
+                if self.iteration % self.config.print_freq == 0:
+                    # TODO: dividing by the num_batches will be bad, if it has many zero contributions due to inconsistent data sizes
+                    self.writer.add_scalar(
+                        "training/" + name, mob_loss / num_batches, self.iteration
+                    )
+            if self.iteration % self.config.print_freq == 0:
+                self.writer.add_scalar(
+                    "training/total_loss",
+                    mean_over_batch_total_loss / num_batches,
+                    self.iteration,
+                )
                 self.postfix_dict["loss"] = format(mean_over_batch_total_loss, ".3e")
 
         return
@@ -148,22 +172,12 @@ class Trainer:
             self.epoch = epoch
             self.train_epoch()
 
-            if epoch % self.config.print_freq == 0:
-                val_error = self.model.compute_validation_error()
-                self.writer.add_scalar(
-                    "validating/validation_error", val_error, self.epoch
-                )
-                self.postfix_dict["val"] = format(val_error, ".3e")
-                self.progress_bar.set_postfix(self.postfix_dict)
-
-            if epoch % self.config.summary_freq == 0:
-                fig = self.model.plot_validation()
-                self.writer.add_figure("Prediction", fig, self.epoch)
-                self.writer.flush()
-            self.update_progress()
+            if self.iteration >= self.config.epochs:
+                break
 
         total_neurons = self.config.n_layers * self.config.n_neurons
 
+        val_error = self.model.compute_validation_error()
         h_dict = {
             "n_neurons": self.config.n_neurons,
             "n_layers": self.config.n_layers,
