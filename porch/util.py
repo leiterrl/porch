@@ -132,6 +132,22 @@ def parse_args():
         help="Set number of epochs",
     )
     parser.add_argument(
+        "--batchsize",
+        type=int,
+        default=0,
+        help="Set batch size",
+    )
+    parser.add_argument(
+        "--batchshuffle",
+        action="store_true",
+        help="Shuffle data in each batch",
+    )
+    parser.add_argument(
+        "--batchcycle",
+        action="store_true",
+        help="Restart iteration if any dataset runs empty during batch creation",
+    )
+    parser.add_argument(
         "--lra",
         action="store_true",
         help="Use learning rate annealing",
