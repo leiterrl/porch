@@ -74,12 +74,16 @@ class WaveEquationErrorSensitive(WaveEquationBaseModel):
         # downsample, TODO: this should be done in a more unified way, i guess
         len_data = len(initial_input)
         if n_boundary < len_data:
-            sampling_points = torch.linspace(0, len_data-1, n_boundary, dtype=int)
+            sampling_points = np.linspace(0, len_data - 1, n_boundary, dtype=int)
             initial_input = initial_input[sampling_points]
         elif n_boundary == len_data:
             pass
         else:
-            raise ValueError('Cannot generate n_sample={} from data of len: {}'.format(n_boundary, len_data))    
+            raise ValueError(
+                "Cannot generate n_sample={} from data of len: {}".format(
+                    n_boundary, len_data
+                )
+            )
         ic_t_labels = torch.zeros(
             [initial_input.shape[0], 1], device=self.config.device, dtype=torch.float32
         )
@@ -144,7 +148,7 @@ def main():
         random.seed(seed)
         np.random.seed(0)
 
-    model_dir = "/import/sgs.local/scratch/leiterrl/wave_eq_rom_error_sensitive"
+    model_dir = f"/import/sgs.local/scratch/leiterrl/wave_eq_rom_error_sensitive_lra_{args.nbases}"
     num_layers = 5
     num_neurons = 20
     weight_norm = False
@@ -163,6 +167,7 @@ def main():
     config.epochs = args.epochs
     config.optimal_weighting = args.opt
     config.n_bases = args.nbases
+    config.batch_size = args.batchsize
 
     config.optimizer_type = "adam"
 
@@ -175,7 +180,8 @@ def main():
         network = FullyConnected(
             2, 1, config.n_layers, config.n_neurons, config.weight_norm
         )
-        torch.save(network, "./cache/model.pth", _use_new_zipfile_serialization=False)
+        # torch.save(network, "./cache/model.pth", _use_new_zipfile_serialization=False)
+        torch.save(network, "./cache/model.pth")
     network.to(device=config.device)
 
     geom = Geometry(torch.tensor([tlims, xlims]))
@@ -216,8 +222,8 @@ def main():
     model.loss_weights["ic_t"] = model.loss_weights["boundary"]
     model.setup_data(n_boundary, n_interior)
     model.setup_validation_data()
-    model.plot_dataset("rom")
-    model.plot_boundary_data("rom")
+    # model.plot_dataset("rom")
+    # model.plot_boundary_data("rom")
 
     trainer = Trainer(model, config, model_dir)
 

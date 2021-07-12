@@ -9,6 +9,8 @@ from .util import get_random_samples, get_regular_grid
 import torch
 from torch import Tensor, zeros
 
+import numpy as np
+
 try:
     from torch import hstack, vstack
 except ImportError:
@@ -124,10 +126,14 @@ class DiscreteBC(BoundaryCondition):
     def get_samples(self, n_samples: int, device=None) -> Tensor:
         len_data = len(self.data)
         if n_samples < len_data:
-            sampling_points = torch.linspace(0, len_data-1, n_samples, dtype=int)
+            sampling_points = np.linspace(0, len_data - 1, n_samples, dtype=int)
             data = self.data[sampling_points]
         elif n_samples == len_data:
             data = self.data
         else:
-            raise ValueError('Cannot generate n_sample={} from data of len: {}'.format(n_samples, len_data))    
+            raise ValueError(
+                "Cannot generate n_sample={} from data of len: {}".format(
+                    n_samples, len_data
+                )
+            )
         return data.to(device=device)

@@ -45,7 +45,7 @@ def run_model(config: PorchConfig):
         network = FullyConnected(
             2, 1, config.n_layers, config.n_neurons, config.weight_norm
         )
-        torch.save(network, "./cache/model.pth", _use_new_zipfile_serialization=False)
+        torch.save(network, "./cache/model.pth")
     network.to(device=config.device)
 
     geom = Geometry(torch.tensor([tlims, xlims]))
@@ -110,8 +110,8 @@ def run_model(config: PorchConfig):
     model.loss_weights["ic_t"] = model.loss_weights["boundary"]
     model.setup_data(config.n_boundary, config.n_interior, config.n_rom)
     model.setup_validation_data()
-    model.plot_dataset("rom")
-    model.plot_boundary_data("rom")
+    # model.plot_dataset("rom")
+    # model.plot_boundary_data("rom")
 
     trainer = Trainer(model, config, config.model_dir)
 
@@ -134,7 +134,12 @@ def main():
 
     config = PorchConfig(device=device, lra=args.lra)
 
-    config.model_dir = "/import/sgs.local/scratch/leiterrl/wave_eq_rom_explicit"
+    if config.lra:
+        config.model_dir = f"/import/sgs.local/scratch/leiterrl/wave_eq_rom_explicit_lra_{args.batchsize}"
+    elif args.opt:
+        config.model_dir = f"/import/sgs.local/scratch/leiterrl/wave_eq_rom_explicit_opt_{args.batchsize}"
+    else:
+        config.model_dir = f"/import/sgs.local/scratch/leiterrl/wave_eq_rom_explicit_equal_{args.batchsize}"
     config.n_layers = 5
     config.n_neurons = 20
     config.weight_norm = False
@@ -142,6 +147,7 @@ def main():
     config.n_boundary = args.nboundary
     config.n_interior = args.ninterior
     config.deterministic = args.determ
+    config.batch_size = args.batchsize
 
     config.epochs = args.epochs
     if args.lbfgs:

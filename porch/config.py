@@ -23,8 +23,8 @@ class PorchConfig:
     n_neurons: int = 20
     n_layers: int = 4
 
-    n_boundary: int = 1000
-    n_interior: int = 10000
+    n_boundary: int = 3000
+    n_interior: int = 30000
     n_rom: int = 10000
     n_bases: int = 2
 

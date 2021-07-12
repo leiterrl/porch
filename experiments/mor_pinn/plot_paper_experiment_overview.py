@@ -4,7 +4,7 @@ from porch.boundary_conditions import BoundaryCondition
 
 from porch.dataset import NamedTensorDataset
 from experiments.mor_pinn.wave_mor_data_generation import DataWaveEquationZero
-from experiments.mor_pinn.pinn_only import WaveEquationPINN
+from experiments.mor_pinn.wave_eq_pinn_only import WaveEquationPINN
 
 
 import torch

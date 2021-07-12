@@ -169,12 +169,16 @@ class WaveEquationBaseModel(BaseModel):
         # downsample, TODO: this should be done in a more unified way, i guess
         len_data = len(initial_input)
         if n_boundary < len_data:
-            sampling_points = torch.linspace(0, len_data-1, n_boundary, dtype=int)
+            sampling_points = np.linspace(0, len_data - 1, n_boundary, dtype=int)
             initial_input = initial_input[sampling_points]
         elif n_boundary == len_data:
             pass
         else:
-            raise ValueError('Cannot generate n_sample={} from data of len: {}'.format(n_boundary, len_data))    
+            raise ValueError(
+                "Cannot generate n_sample={} from data of len: {}".format(
+                    n_boundary, len_data
+                )
+            )
         ic_t_labels = torch.zeros(
             [initial_input.shape[0], 1], device=self.config.device, dtype=torch.float32
         )
@@ -314,19 +318,23 @@ class WaveEquationExplicitDataModel(WaveEquationBaseModel):
         # downsample, TODO: this should be done in a more unified way, i guess
         len_data = len(initial_input)
         if n_boundary < len_data:
-            sampling_points = torch.linspace(0, len_data-1, n_boundary, dtype=int)
+            sampling_points = np.linspace(0, len_data - 1, n_boundary, dtype=int)
             initial_input = initial_input[sampling_points]
         elif n_boundary == len_data:
             pass
         else:
-            raise ValueError('Cannot generate n_sample={} from data of len: {}'.format(n_boundary, len_data))   
+            raise ValueError(
+                "Cannot generate n_sample={} from data of len: {}".format(
+                    n_boundary, len_data
+                )
+            )
         ic_t_labels = torch.zeros(
             [initial_input.shape[0], 1], device=self.config.device, dtype=torch.float32
         )
         ic_t_data = hstack([initial_input, ic_t_labels])
 
         # Expliction solution data
-        X, u = self.data.get_explicit_solution_data(self.wave_speed)
+        X, u = self.data.get_explicit_solution_data(self.wave_speed, True)
 
         # decrease dataset size
         # rand_rows = torch.randperm(X.shape[0])[:n_explicit]
