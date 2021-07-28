@@ -74,7 +74,7 @@ class WaveEquationBaseModel(BaseModel):
         prediction = self.network.forward(data_in)
 
         grad_u = gradient(prediction, data_in)
-        u_t = grad_u[..., 0]
+        u_t = grad_u[..., 0].unsqueeze(1)
         # u_x = grad_u[..., 1]
 
         # gradMagnitude = torch.mean(
@@ -93,14 +93,14 @@ class WaveEquationBaseModel(BaseModel):
         prediction = self.network.forward(data_in)
 
         grad_u = gradient(prediction, data_in)
-        u_x = grad_u[..., 1]
-        u_t = grad_u[..., 0]
+        u_x = grad_u[..., 1].unsqueeze(1)
+        u_t = grad_u[..., 0].unsqueeze(1)
 
         grad_u_x = gradient(u_x, data_in)
-        u_xx = grad_u_x[..., 1]
+        u_xx = grad_u_x[..., 1].unsqueeze(1)
 
         grad_u_t = gradient(u_t, data_in)
-        u_tt = grad_u_t[..., 0]
+        u_tt = grad_u_t[..., 0].unsqueeze(1)
 
         # TODO: move wave_speed to tensor
         # f = (
@@ -268,7 +268,25 @@ class WaveEquationBaseModel(BaseModel):
         return fig
 
     def plot_dataset(self, name: str) -> None:
-        fig, axs = plt.subplots(1, 1, figsize=[12, 6])
+        # sns.set_theme(style="whitegrid")
+        plt.rcParams.update(
+            {
+                "text.usetex": True,
+                "font.family": "serif",
+                "font.serif": ["Times New Roman"],
+                "font.size": 22,
+                "axes.labelsize": 28,
+                "axes.titlesize": 22,
+                "legend.fontsize": 28,
+                "xtick.labelsize": 28,
+                "ytick.labelsize": 28,
+                "lines.linewidth": 3,
+            }
+        )
+        cm = 1 / 2.54  # centimeters in inches
+        width_cm = 15
+        height_cm = width_cm * 0.6
+        fig, axs = plt.subplots(1, 1, figsize=[width_cm, height_cm])
         for data_name in self.get_data_names():
             if data_name == "ic_t":
                 continue
@@ -276,6 +294,9 @@ class WaveEquationBaseModel(BaseModel):
             axs.scatter(data_in[:, 0], data_in[:, 1], label=data_name, alpha=0.5)
 
         axs.legend(loc="upper right")
+        axs.set_xlabel(r"$t$")
+        axs.set_ylabel(r"$\xi$")
+        plt.tight_layout()
         plt.savefig(f"plots/dataset_{name}.png")
 
     def plot_boundary_data(self, name: str) -> None:
@@ -334,12 +355,13 @@ class WaveEquationExplicitDataModel(WaveEquationBaseModel):
         ic_t_data = hstack([initial_input, ic_t_labels])
 
         # Expliction solution data
-        X, u = self.data.get_explicit_solution_data(self.wave_speed, True)
+        # X, u = self.data.get_explicit_solution_data(self.wave_speed, True)
+        X, u = self.data.get_explicit_solution_data(self.wave_speed, False)
 
         # decrease dataset size
-        # rand_rows = torch.randperm(X.shape[0])[:n_explicit]
-        # X = X[rand_rows, :]
-        # u = u[rand_rows]
+        rand_rows = torch.randperm(X.shape[0])[:n_explicit]
+        X = X[rand_rows, :]
+        u = u[rand_rows]
 
         rom_data = hstack([X, u]).to(device=self.config.device)
 
