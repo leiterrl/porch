@@ -127,6 +127,12 @@ def main():
         random.seed(seed)
         np.random.seed(0)
 
+    if args.lra and args.opt:
+        raise RuntimeError("Can't enable both LRA and optimal weighting")
+    
+    if args.lra and args.batchsize:
+        assert args.batchcycle, 'Use lra only with batchcycle, otherwise errors might occur due to empty data sets'
+
     if torch.cuda.is_available():
         device = torch.device("cuda")
     else:
@@ -148,6 +154,7 @@ def main():
     config.n_interior = args.ninterior
     config.deterministic = args.determ
     config.batch_size = args.batchsize
+    config.batch_cycle = args.batchcycle
 
     config.epochs = args.epochs
     if args.lbfgs:

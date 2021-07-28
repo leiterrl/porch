@@ -235,6 +235,9 @@ def main():
 
     if args.lra and args.opt:
         raise RuntimeError("Can't enable both LRA and optimal weighting")
+    
+    if args.lra and args.batchsize:
+        assert args.batchcycle, 'Use lra only with batchcycle, otherwise errors might occur due to empty data sets'
 
     if torch.cuda.is_available():
         device = torch.device("cuda")
@@ -253,6 +256,7 @@ def main():
     config.n_layers = n_layers
     config.deterministic = args.determ
     config.batch_size = args.batchsize
+    config.batch_cycle = args.batchcycle
 
     run_model(config)
 
