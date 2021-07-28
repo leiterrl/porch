@@ -5,6 +5,8 @@ from .config import PorchConfig
 from .model import BaseModel
 import logging
 from tqdm import tqdm
+import dataclasses
+import json
 
 # from tensorboardX import SummaryWriter
 from .util import CorrectedSummaryWriter as SummaryWriter
@@ -109,10 +111,9 @@ class Trainer:
             # initialize training set, e.g. initialize batched data loaders
             self.model.init_training_step()
             # cycle batches
-            mean_over_batches_losses = dict()
+            mean_over_batches_losses = {}
             mean_over_batch_total_loss = 0.0
             for _ in range(num_batches):
-                self.optimizer.zero_grad()
                 losses = self.model.compute_losses()
                 total_loss = 0.0
                 for name, loss in losses.items():
@@ -120,10 +121,10 @@ class Trainer:
                     loss_mean = loss.mean()
                     total_loss += loss_mean
                     try:
-                        mean_over_batches_losses[name] += loss_mean.item()
+                        mean_over_batches_losses[name] += loss_mean
                     except KeyError:
-                        mean_over_batches_losses[name] = loss_mean.item()
-                mean_over_batch_total_loss += total_loss.item()
+                        mean_over_batches_losses[name] = loss_mean
+                mean_over_batch_total_loss += total_loss
 
                 self.optimizer.zero_grad()
                 total_loss.backward()
@@ -145,19 +146,23 @@ class Trainer:
                     self.writer.add_figure("Prediction", fig, self.iteration)
                     self.writer.flush()
 
-            for name, mob_loss in mean_over_batches_losses.items():
-                if self.iteration % self.config.print_freq == 0:
+            if self.iteration % self.config.print_freq == 0:
+                for name, mob_loss in mean_over_batches_losses.items():
                     # TODO: dividing by the num_batches will be bad, if it has many zero contributions due to inconsistent data sizes
                     self.writer.add_scalar(
-                        "training/" + name, mob_loss / num_batches, self.iteration
+                        "training/" + name,
+                        mob_loss.item() / num_batches,
+                        self.iteration,
                     )
             if self.iteration % self.config.print_freq == 0:
                 self.writer.add_scalar(
                     "training/total_loss",
-                    mean_over_batch_total_loss / num_batches,
+                    mean_over_batch_total_loss.item() / num_batches,
                     self.iteration,
                 )
-                self.postfix_dict["loss"] = format(mean_over_batch_total_loss, ".3e")
+                self.postfix_dict["loss"] = format(
+                    mean_over_batch_total_loss.item(), ".3e"
+                )
 
         return
 
@@ -168,9 +173,26 @@ class Trainer:
         logging.info("Start training...")
         self.epoch = 0
         val_error = 0.0
+        config_dict = dataclasses.asdict(self.config)
+        config_dict["device"] = "none"
+        config_path = os.path.join(self.config.model_dir, "config.json")
+        with open(config_path, "w+") as config_file:
+            json.dump(config_dict, config_file)
+
+        # with torch.profiler.profile(
+        #     schedule=torch.profiler.schedule(wait=50, warmup=50, active=3, repeat=2),
+        #     on_trace_ready=torch.profiler.tensorboard_trace_handler(
+        #         self.config.model_dir
+        #     ),
+        #     record_shapes=True,
+        #     profile_memory=True,
+        #     with_stack=True,
+        #     with_flops=True,
+        # ) as prof:
         for epoch in range(self.config.epochs + 1):
             self.epoch = epoch
             self.train_epoch()
+            # prof.step()
 
             if self.iteration >= self.config.epochs:
                 break
