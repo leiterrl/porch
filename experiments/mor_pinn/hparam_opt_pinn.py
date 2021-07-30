@@ -17,7 +17,7 @@ import sys
 import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from experiments.mor_pinn.pinn_only import run_model
+from experiments.mor_pinn.wave_eq_pinn_only import run_model
 
 
 lower_bounds = [2, 20, 1e-5]

@@ -107,39 +107,15 @@ class Trainer:
             self.optimizer.step(closure)
 
         else:
-            num_batches = self.model.get_number_of_batches()
-            # initialize training set, e.g. initialize batched data loaders
-            self.model.init_training_step()
-            # cycle batches
-            mean_over_batches_losses = {}
-            mean_over_batch_total_loss = 0.0
-            for _ in range(num_batches):
-                losses = self.model.compute_losses()
-                total_loss = 0.0
-                for name, loss in losses.items():
-                    # TODO: unify norm calculation
-                    loss_mean = loss.mean()
-                    total_loss += loss_mean
-                    try:
-                        mean_over_batches_losses[name] += loss_mean
-                    except KeyError:
-                        mean_over_batches_losses[name] = loss_mean
-                mean_over_batch_total_loss += total_loss
-
-                self.optimizer.zero_grad()
-                total_loss.backward()
-                self.optimizer.step()
-                self.model.training_step()
-                self.iteration += 1
-                self.update_progress()
-
-                if self.iteration % self.config.print_freq == 0:
-                    val_error = self.model.compute_validation_error()
-                    self.writer.add_scalar(
-                        "validating/validation_error", val_error, self.iteration
-                    )
-                    self.postfix_dict["val"] = format(val_error, ".3e")
-                    self.progress_bar.set_postfix(self.postfix_dict)
+            losses_mean = dict()
+            losses = self.model.compute_losses()
+            total_loss = 0.0
+            for name, loss in losses.items():
+                # TODO: unify norm calculation
+                loss_mean = loss.mean()
+                losses_mean[name] = loss_mean
+                total_loss += loss_mean
+            losses_mean["total"] = total_loss
 
             self.optimizer.zero_grad()
             total_loss.backward()
@@ -149,23 +125,12 @@ class Trainer:
             self.update_progress()
 
             if self.iteration % self.config.print_freq == 0:
-                for name, mob_loss in mean_over_batches_losses.items():
-                    # TODO: dividing by the num_batches will be bad, if it has many zero contributions due to inconsistent data sizes
-                    self.writer.add_scalar(
-                        "training/" + name,
-                        mob_loss.item() / num_batches,
-                        self.iteration,
-                    )
-            if self.iteration % self.config.print_freq == 0:
                 val_error = self.model.compute_validation_error()
                 self.writer.add_scalar(
-                    "training/total_loss",
-                    mean_over_batch_total_loss.item() / num_batches,
-                    self.iteration,
+                    "validating/validation_error", val_error, self.iteration
                 )
-                self.postfix_dict["loss"] = format(
-                    mean_over_batch_total_loss.item(), ".3e"
-                )
+                self.postfix_dict["val"] = format(val_error, ".3e")
+                self.progress_bar.set_postfix(self.postfix_dict)
 
             if self.iteration % self.config.summary_freq == 0:
                 fig = self.model.plot_validation()
@@ -199,8 +164,6 @@ class Trainer:
         # ) as prof:
         for epoch in range(self.config.epochs + 1):
             self.epoch = epoch
-            self.train_epoch()
-            # prof.step()
 
             num_batches = self.model.get_number_of_batches()
             # initialize training set, e.g. initialize batched data loaders
@@ -209,6 +172,7 @@ class Trainer:
             mean_over_batches_losses = dict()
             for _ in range(num_batches):
                 loss_means = self.train_epoch()
+
                 for name, loss_mean in loss_means.items():
                     try:
                         mean_over_batches_losses[name] += loss_mean
@@ -218,11 +182,11 @@ class Trainer:
                 if self.iteration % self.config.print_freq == 0:
                     for name in self.model.losses.keys():
                         # TODO: dividing by the num_batches will be bad, if it has many zero contributions due to inconsistent data sizes
-                        mob_loss = mean_over_batches_losses[name] / num_batches
+                        mob_loss = mean_over_batches_losses[name].item() / num_batches
                         self.writer.add_scalar(
                             "training/" + name, mob_loss, self.iteration
                         )
-                    mob_total = mean_over_batches_losses["total"] / num_batches
+                    mob_total = mean_over_batches_losses["total"].item() / num_batches
                     self.writer.add_scalar(
                         "training/total_loss",
                         mob_total,
@@ -234,6 +198,7 @@ class Trainer:
                     break
             if self.iteration >= self.config.epochs:
                 break
+            # prof.step()
 
         total_neurons = self.config.n_layers * self.config.n_neurons
 
