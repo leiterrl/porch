@@ -95,12 +95,20 @@ class BaseModel:
         validation_in = self.validation_data[:, : self.network.d_in]
         validation_labels = self.validation_data[:, -self.network.d_out :]
 
+        # decrease dataset size
+        decrease_validation = False
+        n_validation = int(1e5)
+        rand_rows = torch.randperm(validation_in.shape[0])[:n_validation]
+        if decrease_validation:
+            validation_in = validation_in[rand_rows, :]
+            validation_labels = validation_labels[rand_rows]
+
         self.network.eval()
         prediction = self.network.forward(validation_in)
         self.network.train()
 
-        return torch.mean(torch.pow(prediction - validation_labels, 2))
-        # return relative_l2_error(prediction, validation_labels)
+        # return torch.mean(torch.pow(prediction - validation_labels, 2))
+        return relative_l2_error(prediction, validation_labels)
         # return torch.sqrt(torch.sum(torch.pow(prediction - validation_labels, 2)))
 
     def set_boundary_conditions(self, boundary_conditions: "list[BoundaryCondition]"):
