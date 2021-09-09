@@ -132,6 +132,7 @@ class WaveEquationPINN(WaveEquationBaseModel):
         # axs[1].imshow(im_data_gt.detach().cpu().numpy())
         im2 = axs[1].imshow(
             error,
+            # np.flip(im_data_gt.T, axis=0),
             interpolation="nearest",
             extent=domain_extent,
             origin="lower",
@@ -235,9 +236,11 @@ def main():
 
     if args.lra and args.opt:
         raise RuntimeError("Can't enable both LRA and optimal weighting")
-    
+
     if args.lra and args.batchsize:
-        assert args.batchcycle, 'Use lra only with batchcycle, otherwise errors might occur due to empty data sets'
+        assert (
+            args.batchcycle
+        ), "Use lra only with batchcycle, otherwise errors might occur due to empty data sets"
 
     if torch.cuda.is_available():
         device = torch.device("cuda")
@@ -245,7 +248,7 @@ def main():
         device = torch.device("cpu")
 
     config = PorchConfig(device=device, lra=args.lra)
-    config.weight_norm = False
+    config.weight_norm = True
     config.normalize_input = False
     config.epochs = args.epochs
     config.wave_speed = 1.0
