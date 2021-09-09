@@ -94,3 +94,13 @@ target/
 
 # IDE settings
 .vscode/
+
+# plots
+plots/
+
+# pymor cache
+cache/
+
+# tensorboard run folder
+run/
+log/
