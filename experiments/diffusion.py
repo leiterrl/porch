@@ -63,6 +63,47 @@ class DiffusionModel(BaseModel):
 
         return torch.pow(prediction - labels, 2)
 
+    @torch.jit.script
+    def jit_loss(jit_in, jit_labels, jit_prediction, jit_gu, jit_gux):
+        u_t = jit_gu[..., 1]
+        u_xx = jit_gux[..., 0]
+
+        D = 0.05
+        D_inv = 1.0 / D
+
+        f = u_xx - u_t * D_inv
+
+        return torch.pow(f - jit_labels, 2)
+
+    # # @torch.jit.script
+    # def interior_loss(self, loss_name) -> torch.Tensor:
+
+    #     data_in = self.get_input(loss_name)
+    #     if len(data_in) == 0:
+    #         return torch.zeros([1] + list(data_in.shape)[1:], device=self.config.device)
+    #     labels = self.get_labels(loss_name)
+    #     prediction = self.network.forward(data_in)
+
+    #     grad_u = gradient(prediction, data_in)
+    #     u_x = grad_u[..., 0]
+    #     # u_t = grad_u[..., 1]
+
+    #     grad_u_x = gradient(u_x, data_in)
+
+    #     @torch.jit.script
+    #     def jit_loss(jit_in, jit_labels, jit_prediction, jit_gu, git_gux):
+    #         u_t = jit_gu[..., 1]
+    #         u_xx = git_gux[..., 0]
+
+    #         D = 0.05
+    #         D_inv = 1.0 / D
+
+    #         f = u_xx - u_t * D_inv
+
+    #         return torch.pow(f - jit_labels, 2)
+
+    #     return jit_loss(data_in, labels, prediction, grad_u, grad_u_x)
+
     def interior_loss(self, loss_name) -> torch.Tensor:
 
         data_in = self.get_input(loss_name)
@@ -76,6 +117,7 @@ class DiffusionModel(BaseModel):
         u_t = grad_u[..., 1]
 
         grad_u_x = gradient(u_x, data_in)
+
         u_xx = grad_u_x[..., 0]
 
         D = 0.05
@@ -84,6 +126,7 @@ class DiffusionModel(BaseModel):
         f = u_xx - u_t * D_inv
 
         return torch.pow(f - labels, 2)
+        # return self.jit_loss(data_in, labels, prediction, grad_u, grad_u_x)
 
     def setup_losses(self) -> None:
         self.losses = {"boundary": self.boundary_loss, "interior": self.interior_loss}
