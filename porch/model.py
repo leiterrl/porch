@@ -6,6 +6,8 @@ from .geometry import Geometry
 from .boundary_conditions import BoundaryCondition
 import torch
 
+from collections.abc import Sequence
+
 
 class BaseModel:
     _input: NamedTensorDataset
@@ -15,16 +17,17 @@ class BaseModel:
         network: FullyConnected,
         geometry: Geometry,
         config: PorchConfig,
-        boundary_conditions: "list[BoundaryCondition]",
+        boundary_conditions: "Sequence[BoundaryCondition]",
     ):
         self.network = network
         self.geometry = geometry
         self.config = config
+        self.losses = {}
         self.set_boundary_conditions(boundary_conditions)
         self.setup_losses()
         self.setup_loss_weights()
 
-    def get_data_names(self) -> list:
+    def get_data_names(self):
         return self.losses.keys()
 
     # TODO: merge methods below
@@ -66,6 +69,9 @@ class BaseModel:
         self.loss_weights = {}
         for name in self.losses.keys():
             self.loss_weights[name] = 1.0
+
+    def plot_validation(self, writer, iteration):
+        raise NotImplementedError
 
     def setup_validation_data(self, n_validation: int) -> None:
         raise NotImplementedError
@@ -111,7 +117,9 @@ class BaseModel:
         return relative_l2_error(prediction, validation_labels)
         # return torch.sqrt(torch.sum(torch.pow(prediction - validation_labels, 2)))
 
-    def set_boundary_conditions(self, boundary_conditions: "list[BoundaryCondition]"):
+    def set_boundary_conditions(
+        self, boundary_conditions: "Sequence[BoundaryCondition]"
+    ):
         self.boundary_conditions = boundary_conditions
 
     def get_number_of_batches(self) -> int:
