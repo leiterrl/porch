@@ -1,8 +1,13 @@
+from __future__ import annotations
+
 from matplotlib.figure import Figure
+from torch.types import Number
 from porch.boundary_conditions import BoundaryCondition, DirichletBC
 from porch.training import Trainer
 from porch.dataset import NamedTensorDataset
 import logging
+
+from collections.abc import Sequence
 
 
 import torch
@@ -38,7 +43,7 @@ class DiffusionModel(BaseModel):
         network: FullyConnected,
         geometry: Geometry,
         config: PorchConfig,
-        boundary_conditions: "list[BoundaryCondition]",
+        boundary_conditions: "Sequence[BoundaryCondition]",
     ) -> None:
         super().__init__(network, geometry, config, boundary_conditions)
 
@@ -104,7 +109,8 @@ class DiffusionModel(BaseModel):
 
     #     return jit_loss(data_in, labels, prediction, grad_u, grad_u_x)
 
-    def interior_loss(self, loss_name) -> torch.Tensor:
+    # @torch.jit.script
+    def interior_loss(self, loss_name: str) -> torch.Tensor:
 
         data_in = self.get_input(loss_name)
         if len(data_in) == 0:
@@ -113,6 +119,7 @@ class DiffusionModel(BaseModel):
         prediction = self.network.forward(data_in)
 
         grad_u = gradient(prediction, data_in)
+
         u_x = grad_u[..., 0]
         u_t = grad_u[..., 1]
 
@@ -159,10 +166,14 @@ class DiffusionModel(BaseModel):
     def setup_validation_data(self, n_validation: int) -> None:
 
         x_linspace = torch.linspace(
-            self.geometry.limits[0, 0], self.geometry.limits[0, 1], n_validation
+            float(self.geometry.limits[0, 0]),
+            float(self.geometry.limits[0, 1]),
+            n_validation,
         )
         t_linspace = torch.linspace(
-            self.geometry.limits[1, 0], self.geometry.limits[1, 1], n_validation
+            float(self.geometry.limits[1, 0]),
+            float(self.geometry.limits[1, 1]),
+            n_validation,
         )
         xx, tt = torch.meshgrid(x_linspace, t_linspace)
         z = P(xx, tt)
@@ -181,7 +192,7 @@ class DiffusionModel(BaseModel):
         axs.legend()
         plt.savefig("plots/dataset_diffusion.png")
 
-    def plot_validation(self) -> Figure:
+    def plot_validation(self, writer, iteration) -> Figure:
         validation_in = self.validation_data[:, : self.network.d_in]
         validation_labels = self.validation_data[:, -self.network.d_out :]
 
@@ -224,7 +235,7 @@ class DiffusionModel(BaseModel):
 
 def main(
     n_epochs=10000, model_dir="/import/sgs.local/scratch/leiterrl/1d_diffusion"
-) -> float:
+) -> Number:
     num_layers = 4
     num_neurons = 20
     weight_norm = False
