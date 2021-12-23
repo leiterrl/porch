@@ -47,6 +47,10 @@ class Trainer:
         self.epoch = 0
         self.iteration = 0
         self.total_loss = torch.tensor([0.0])
+        if config.exp_decay:
+            self.scheduler = torch.optim.lr_scheduler.ExponentialLR(
+                self.optimizer, self.config.exp_decay_gamme
+            )
 
     @staticmethod
     def compute_loss_grads(network: FullyConnected, loss: torch.Tensor):
@@ -82,6 +86,35 @@ class Trainer:
                     1.0 - self.config.lra_alpha
                 ) * self.model.loss_weights[name] + self.config.lra_alpha * update
 
+        elif self.config.dirichlet and self.iteration % 10 == 0 and self.iteration > 1:
+            self.optimizer.zero_grad()
+            losses = self.model.compute_losses_unweighted()
+            loss_grads = {}
+            for name, loss in losses.items():
+                self.optimizer.zero_grad()
+                loss_grads[name] = self.compute_loss_grads(
+                    self.model.network, torch.mean(loss)
+                )
+
+            # TODO: this is bad to assume i guess...
+            # first_loss_max_grad = torch.max(torch.abs(loss_grads["interior"]))
+            var_grads = {}
+            for name, grad in loss_grads.items():
+                var_grads[name] = torch.var(torch.abs(grad))
+
+            # max_var_grad = max(var_grads.values())
+            max_var_grad = var_grads["interior"]
+
+            for name, var_grad in var_grads.items():
+                update = var_grad / max_var_grad
+                # update weights
+                self.model.loss_weights[name] = (
+                    1.0 - self.config.lra_alpha
+                ) * self.model.loss_weights[name] + self.config.lra_alpha * update
+
+            self.model.loss_weights["interior"] = 1.0
+
+        losses_mean = {}
         if self.config.optimizer_type == "lbfgs":
 
             def closure() -> float:
@@ -89,7 +122,9 @@ class Trainer:
 
                 # TODO: remove duplicate code below
                 losses = self.model.compute_losses()
-                closure_loss = 0.0
+                closure_loss = torch.tensor(
+                    [0.0], dtype=torch.float32, device=self.config.device
+                )
                 for name, loss in losses.items():
                     # TODO: unify norm calculation
                     loss_mean = loss.mean()
@@ -102,14 +137,16 @@ class Trainer:
                     self.postfix_dict["loss"] = format(closure_loss.item(), ".3e")
 
                 closure_loss.backward()
-                return closure_loss
+                return float(closure_loss[0])
 
             self.optimizer.step(closure)
 
         else:
             losses_mean = dict()
             losses = self.model.compute_losses()
-            total_loss = 0.0
+            total_loss = torch.tensor(
+                [0.0], dtype=torch.float32, device=self.config.device
+            )
             for name, loss in losses.items():
                 # TODO: unify norm calculation
                 loss_mean = loss.mean()
@@ -133,9 +170,12 @@ class Trainer:
                 self.progress_bar.set_postfix(self.postfix_dict)
 
             if self.iteration % self.config.summary_freq == 0:
-                fig = self.model.plot_validation()
+                fig = self.model.plot_validation(self.writer, self.iteration)
                 self.writer.add_figure("Prediction", fig, self.iteration)
                 self.writer.flush()
+
+        if self.scheduler:
+            self.scheduler.step()
 
         return losses_mean
 

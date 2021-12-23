@@ -3,6 +3,10 @@ from enum import Enum
 import numpy as np
 import argparse
 
+# from typing import Optional, List
+from torch.jit.annotations import Optional, List
+from torch import Tensor
+
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.tensorboard.summary import hparams
 
@@ -25,12 +29,48 @@ class CorrectedSummaryWriter(SummaryWriter):
 
 
 # TODO: handle non-scalar case
-def gradient(y, x):
-    grad_outputs = torch.ones_like(y)
+# def gradient(y, x):
+#     grad_outputs = torch.ones_like(y)
+#     grad = torch.autograd.grad(
+#         [y], [x], grad_outputs=[grad_outputs], create_graph=True, retain_graph=True
+#     )[0]
+#     return grad
+
+
+# # TODO: handle non-scalar case
+# @torch.jit.script
+# def gradient(y, x):
+#     # grad_outputs = [torch.ones_like(y)]
+#     grad_outputs = torch.jit.annotate(Optional[Tensor], torch.ones_like(y))
+#     # grad_outputs = torch.jit.annotate(Optional[List[Optional[Tensor]]], [torch.ones_like(y)]) -> "Expected a List type hint but instead got Optional[List[Optional[Tensor]]]"
+#     grad = torch.autograd.grad(
+#         [y], [x], [grad_outputs], create_graph=True, retain_graph=True
+#     )[0]
+#     return grad
+
+
+@torch.jit.script
+def gradient(y: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    grad_outputs: List[Optional[torch.Tensor]] = [torch.ones_like(y)]
+    # grad_outputs = [torch.ones_like(y)]
+    # grad_outputs = torch.jit.annotate(Optional[Tensor], [torch.ones_like(y)])
     grad = torch.autograd.grad(
-        y, [x], grad_outputs=grad_outputs, create_graph=True, retain_graph=True
-    )[0]
-    return grad
+        [
+            y,
+        ],
+        [x],
+        grad_outputs=grad_outputs,
+        create_graph=True,
+    )
+
+    assert grad is not None
+
+    # optional type refinement using an if statement
+    grad = grad[0]
+
+    assert grad is not None
+
+    return grad  # grad can be None here, so it is Optional[torch.Tensor]
 
 
 def hstack(tensor_tuple):
@@ -39,6 +79,13 @@ def hstack(tensor_tuple):
 
 def vstack(tensor_tuple):
     return torch.cat(tensor_tuple, dim=0)
+
+
+def fig_to_rgb_array(fig):
+    fig.canvas.draw()
+    image_array = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+    image_array = image_array.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+    return image_array
 
 
 class SamplingType(Enum):
@@ -149,6 +196,11 @@ def parse_args():
     )
     parser.add_argument(
         "--lra",
+        action="store_true",
+        help="Use learning rate annealing",
+    )
+    parser.add_argument(
+        "--dirichlet",
         action="store_true",
         help="Use learning rate annealing",
     )
