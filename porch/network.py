@@ -129,5 +129,5 @@ def init_weights_trunc_normal_(m: torch.nn.Module) -> None:
         m: torch module
     """
     if type(m) == nn.Linear:
-        if hasattr(m, "weight"):
+        if hasattr(m, "weight") and type(m.weight) is torch.Tensor:
             xavier_trunc_normal_(m.weight)

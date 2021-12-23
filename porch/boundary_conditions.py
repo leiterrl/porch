@@ -31,7 +31,7 @@ class BoundaryCondition(ABC):
         self.random = random
 
     @abstractmethod
-    def get_samples(self, n_samples: int) -> Tensor:
+    def get_samples(self, n_samples: int, device: torch.device) -> Tensor:
         raise NotImplementedError
 
     @staticmethod
@@ -124,16 +124,17 @@ class DiscreteBC(BoundaryCondition):
         self.data = data
 
     def get_samples(self, n_samples: int, device=None) -> Tensor:
+        # TODO: fix sampling discrete bc
         len_data = len(self.data)
-        if n_samples < len_data:
-            sampling_points = np.linspace(0, len_data - 1, n_samples, dtype=int)
-            data = self.data[sampling_points]
-        elif n_samples == len_data:
-            data = self.data
-        else:
-            raise ValueError(
-                "Cannot generate n_sample={} from data of len: {}".format(
-                    n_samples, len_data
-                )
-            )
+        # if n_samples < len_data:
+        #     sampling_points = np.linspace(0, len_data - 1, n_samples, dtype=int)
+        #     data = self.data[sampling_points, :]
+        # elif n_samples == len_data:
+        data = self.data
+        # else:
+        #     raise ValueError(
+        #         "Cannot generate n_sample={} from data of len: {}".format(
+        #             n_samples, len_data
+        #         )
+        #     )
         return data.to(device=device)
