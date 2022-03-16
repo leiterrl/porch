@@ -47,6 +47,7 @@ class Trainer:
         self.epoch = 0
         self.iteration = 0
         self.total_loss = torch.tensor([0.0])
+        self.scheduler = None
         if config.exp_decay:
             self.scheduler = torch.optim.lr_scheduler.ExponentialLR(
                 self.optimizer, self.config.exp_decay_gamme
@@ -188,6 +189,7 @@ class Trainer:
         val_error = 0.0
         config_dict = dataclasses.asdict(self.config)
         config_dict["device"] = "none"
+        config_dict["dtype"] = "none"
         config_path = os.path.join(self.config.model_dir, "config.json")
         with open(config_path, "w+") as config_file:
             json.dump(config_dict, config_file)
@@ -253,4 +255,5 @@ class Trainer:
 
         self.writer.add_hparams(h_dict, h_metrics)
         self.writer.close()
+        self.progress_bar.close()
         return val_error.item()

@@ -120,6 +120,19 @@ def get_regular_grid(N: tuple, bounds: torch.Tensor, device=None) -> torch.Tenso
     return regular_grid.to(device)
 
 
+# TODO: use torch functions
+def get_random_samples_circle(
+    center: tuple, r: float, n: int, device=None
+) -> torch.Tensor:
+    r_array = r * np.sqrt(np.random.uniform(size=n))
+    theta_array = np.random.uniform(0.0, 2.0 * np.pi, size=n)
+    x = center[0] + r_array * np.cos(theta_array)
+    y = center[1] + r_array * np.sin(theta_array)
+    samples = np.vstack([x, y]).T
+    return torch.as_tensor(samples, device=device, dtype=torch.float32)
+
+
+# TODO: use torch functions
 def get_random_samples(bounds: torch.Tensor, n: int, device=None) -> torch.Tensor:
     low = [bound[0] for bound in bounds]
     high = [bound[1] for bound in bounds]
@@ -142,8 +155,10 @@ def relative_l2_error(pred, truth):
             error is returned.
     """
     if len(pred) > 0 and len(truth) > 0:
-        nominator = torch.mean(torch.square(pred - truth))
-        denominator = torch.mean(torch.square(truth - torch.mean(truth)))
+        # nominator = torch.mean(torch.square(pred - truth))
+        # denominator = torch.mean(torch.square(truth - torch.mean(truth)))
+        nominator = torch.linalg.norm(truth - pred)
+        denominator = torch.linalg.norm(truth)
         if denominator > 0.0:
             return nominator / denominator
         else:
