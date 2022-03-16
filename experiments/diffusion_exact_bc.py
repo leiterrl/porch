@@ -37,6 +37,36 @@ def P(x, t):
     return (F * torch.cos(k * x) + E * torch.sin(k * x)) * torch.exp(-(k ** 2) * D * t)
 
 
+def circle_bc(data_in):
+    center = torch.zeros_like(data_in)
+    center[:, 0] = np.pi
+    center[:, 1] = 5.0
+    r = 1.0
+
+    diff = data_in - center
+    dist = torch.linalg.norm(diff, dim=1).unsqueeze(1)
+
+    z_out = dist * 0.0
+    # z_out = 1.0 / dist
+    # z_out = 1.0 / torch.pow(dist, 2.0)
+    # z_out = torch.zeros_like(data_in)[:, 0].unsqueeze(1)
+    z_out[dist < r] = 1.0
+    # z_out[dist]
+
+    return z_out
+
+    # data_in_proj = diff / torch.linalg.norm(diff, dim=1) * 1.0
+
+
+def ic_func(t_in):
+    x_in_space = t_in[:, 0]
+    t_in_space = torch.zeros_like(t_in[:, 1])
+    # t_in_space[:, :] = 0.0
+    z_in = torch.unsqueeze(P(x_in_space, t_in_space), 1)
+    # z_in[t_in_space > 0.0, 0] = 0.0
+    return z_in
+
+
 class DiffusionModel(BaseModel):
     def __init__(
         self,
@@ -47,26 +77,35 @@ class DiffusionModel(BaseModel):
     ) -> None:
         super().__init__(network, geometry, config, boundary_conditions)
 
-    def boundary_loss(self, loss_name) -> torch.Tensor:
-        """u(x=lb,t) = u(x=ub,t) = 0"""
-        data_in = self.get_input(loss_name)
-        if len(data_in) == 0:
-            return torch.zeros([1] + list(data_in.shape)[1:], device=self.config.device)
-        labels = self.get_labels(loss_name)
-        prediction = self.network.forward(data_in)
+    def forward_modified(self, data_in):
+        nn_prediction = self.network.forward(data_in)
+        t_in = torch.unsqueeze(data_in[:, 1], 1)
+
+        circle_data = circle_bc(data_in)
+        circle_mask = 1.0 - circle_data
+
+        return ic_func(data_in) * circle_mask + circle_data
+
+        # def boundary_loss(self, loss_name) -> torch.Tensor:
+        #     """u(x=lb,t) = u(x=ub,t) = 0"""
+        #     data_in = self.get_input(loss_name)
+        #     if len(data_in) == 0:
+        #         return torch.zeros([1] + list(data_in.shape)[1:], device=self.config.device)
+        #     labels = self.get_labels(loss_name)
+        #     prediction = self.network.forward(data_in)
 
         return torch.pow(prediction - labels, 2)
 
     # TODO: complete ic (u and u_t)
-    def ic_loss(self, loss_name) -> torch.Tensor:
-        """u_t(x,t=0) = 0"""
-        data_in = self.get_input(loss_name)
-        if len(data_in) == 0:
-            return torch.zeros([1] + list(data_in.shape)[1:], device=self.config.device)
-        labels = self.get_labels(loss_name)
-        prediction = self.network.forward(data_in)
+    # def ic_loss(self, loss_name) -> torch.Tensor:
+    #     """u_t(x,t=0) = 0"""
+    #     data_in = self.get_input(loss_name)
+    #     if len(data_in) == 0:
+    #         return torch.zeros([1] + list(data_in.shape)[1:], device=self.config.device)
+    #     labels = self.get_labels(loss_name)
+    #     prediction = self.network.forward(data_in)
 
-        return torch.pow(prediction - labels, 2)
+    #     return torch.pow(prediction - labels, 2)
 
     # @torch.jit.script
     # def jit_loss(jit_in, jit_labels, jit_prediction, jit_gu, jit_gux):
@@ -116,7 +155,7 @@ class DiffusionModel(BaseModel):
         if len(data_in) == 0:
             return torch.zeros([1] + list(data_in.shape)[1:], device=self.config.device)
         labels = self.get_labels(loss_name)
-        prediction = self.network.forward(data_in)
+        prediction = self.forward_modified(data_in)
 
         grad_u = gradient(prediction, data_in)
 
@@ -136,17 +175,17 @@ class DiffusionModel(BaseModel):
         # return self.jit_loss(data_in, labels, prediction, grad_u, grad_u_x)
 
     def setup_losses(self) -> None:
-        self.losses = {"boundary": self.boundary_loss, "interior": self.interior_loss}
+        self.losses = {"interior": self.interior_loss}
 
     def setup_data(self, n_boundary: int, n_interior: int) -> None:
         # spread n_boudary evenly over all boundaries (including initial condition)
-        n_boundary = n_boundary // (len(self.boundary_conditions) + 1)
-        bc_tensors = []
-        logging.info("Generating BC data...")
-        for bc in self.boundary_conditions:
-            bc_data = bc.get_samples(n_boundary, device=self.config.device)
-            bc_tensors.append(bc_data)
-        boundary_data = torch.cat(bc_tensors)
+        # n_boundary = n_boundary // (len(self.boundary_conditions) + 1)
+        # bc_tensors = []
+        # logging.info("Generating BC data...")
+        # for bc in self.boundary_conditions:
+        #     bc_data = bc.get_samples(n_boundary, device=self.config.device)
+        #     bc_tensors.append(bc_data)
+        # boundary_data = torch.cat(bc_tensors)
 
         logging.info("Generating interior data...")
         interior_data = self.geometry.get_random_samples(
@@ -157,9 +196,7 @@ class DiffusionModel(BaseModel):
         )
         interior_data = hstack([interior_data, interior_labels])
 
-        complete_dataset = NamedTensorDataset(
-            {"boundary": boundary_data, "interior": interior_data}
-        )
+        complete_dataset = NamedTensorDataset({"interior": interior_data})
 
         self.set_dataset(complete_dataset)
 
@@ -199,7 +236,7 @@ class DiffusionModel(BaseModel):
         domain_shape = (200, 200)
         fig, axs = plt.subplots(2, 1, figsize=[12, 6], sharex=True)
         self.network.eval()
-        prediction = self.network.forward(validation_in)
+        prediction = self.forward_modified(validation_in)
         self.network.train()
 
         im_data = prediction.detach().cpu().numpy()
@@ -234,7 +271,8 @@ class DiffusionModel(BaseModel):
 
 
 def main(
-    n_epochs=10000, model_dir="/import/sgs.local/scratch/leiterrl/1d_diffusion"
+    n_epochs=100000,
+    model_dir="/import/sgs.local/scratch/leiterrl/1d_diffusion_exact_bc",
 ) -> Number:
     num_layers = 4
     num_neurons = 20
