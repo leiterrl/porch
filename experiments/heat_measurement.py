@@ -15,7 +15,7 @@ from porch.config import PorchConfig
 from porch.geometry import Geometry
 from porch.model import BaseModel
 from porch.network import FullyConnected
-from porch.util import gradient
+from porch.util import get_random_samples_circle, gradient
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -33,8 +33,16 @@ class HeatModel(BaseModel):
         geometry: Geometry,
         config: PorchConfig,
         boundary_conditions: "Sequence[BoundaryCondition]",
+        measurement: float,
+        error_sensitive: bool,
     ) -> None:
+        self.measurement = measurement
+        self.error_sensitive = error_sensitive
+        if error_sensitive and measurement == 0.0:
+            raise NotImplementedError("error sens but no measurement given")
+
         super().__init__(network, geometry, config, boundary_conditions)
+        self.relu = torch.nn.ReLU()
 
     def exact_solution(self, x, y):
         return 0.0 * x + 0.0 * y
@@ -73,8 +81,36 @@ class HeatModel(BaseModel):
 
         return torch.pow(f - labels, 2)
 
+    def measurement_loss(self, loss_name):
+        data_in = self.get_input(loss_name)
+        if len(data_in) == 0:
+            return torch.zeros([1] + list(data_in.shape)[1:], device=self.config.device)
+        labels = self.get_labels(loss_name)
+        prediction = self.network.forward(data_in)
+
+        epsilon = self.measurement * 5.0
+        loss_measurement = (labels - prediction).pow(2).mean()
+        if self.error_sensitive:
+            # TODO: useless power here?
+            l_d_2 = self.relu(loss_measurement - epsilon).pow(2)
+            l_d = (l_d_2).mean(dim=0, keepdim=True)
+        else:
+            l_d = loss_measurement
+
+        return l_d
+
     def setup_losses(self) -> None:
-        self.losses = {"boundary": self.boundary_loss, "interior": self.interior_loss}
+        if self.measurement > 0.0:
+            self.losses = {
+                "boundary": self.boundary_loss,
+                "interior": self.interior_loss,
+                "measurement": self.measurement_loss,
+            }
+        else:
+            self.losses = {
+                "boundary": self.boundary_loss,
+                "interior": self.interior_loss,
+            }
 
     def setup_data(self, n_boundary: int, n_interior: int) -> None:
         # spread n_boudary evenly over all boundaries (including initial condition)
@@ -95,9 +131,36 @@ class HeatModel(BaseModel):
         )
         interior_data = hstack([interior_data, interior_labels])
 
-        complete_dataset = NamedTensorDataset(
-            {"boundary": boundary_data, "interior": interior_data}
-        )
+        # measurement_data = torch.zeros(
+        # [1, 3], device=self.config.device, dtype=torch.float32
+        # )
+        if self.measurement > 0.0:
+            # measurement_data = torch.as_tensor(
+            #     [0.5, 0.5, 0.01], device=self.config.device, dtype=torch.float32
+            # ).unsqueeze(0)
+            measurement_data = get_random_samples_circle(
+                (0.5, 0.5), 0.1, 100, device=self.config.device
+            )
+            measurement_labels = torch.ones(
+                [measurement_data.shape[0], 1],
+                device=self.config.device,
+                dtype=torch.float32,
+            )
+
+            measurement_labels = measurement_labels * self.measurement
+            measurement_data = hstack([measurement_data, measurement_labels])
+
+            complete_dataset = NamedTensorDataset(
+                {
+                    "boundary": boundary_data,
+                    "interior": interior_data,
+                    "measurement": measurement_data,
+                }
+            )
+        else:
+            complete_dataset = NamedTensorDataset(
+                {"boundary": boundary_data, "interior": interior_data}
+            )
 
         self.set_dataset(complete_dataset)
 
@@ -122,7 +185,7 @@ class HeatModel(BaseModel):
         self.validation_data = hstack([val_X, val_u]).to(device=self.config.device)
 
     def plot_dataset(self) -> None:
-        fig, axs = plt.subplots(1, 1, figsize=[12, 6])
+        fig, axs = plt.subplots(1, 1, figsize=[6, 6])
         for name in self.get_data_names():
             data_in = self.get_input(name).cpu().numpy()
             axs.scatter(data_in[:, 0], data_in[:, 1], label=name, alpha=0.5)
@@ -174,7 +237,10 @@ class HeatModel(BaseModel):
 
 
 def main(
-    n_epochs=100, model_dir="/import/sgs.local/scratch/leiterrl/heat_measurement"
+    measurement: float,
+    error_sensitive: bool,
+    n_epochs=120,
+    model_dir="/import/sgs.local/scratch/leiterrl/heat_measurement",
 ) -> Number:
     num_layers = 4
     num_neurons = 20
@@ -241,7 +307,9 @@ def main(
 
     boundary_conditions = [upper_bc, lower_bc, left_bc, right_bc]
 
-    model = HeatModel(network, geom, config, boundary_conditions)
+    model = HeatModel(
+        network, geom, config, boundary_conditions, measurement, error_sensitive
+    )
 
     model.setup_data(n_boundary, n_interior)
     model.setup_validation_data(n_validation)
@@ -253,4 +321,17 @@ def main(
 
 
 if __name__ == "__main__":
-    main()
+    errors = [0.01, 0.02, 0.05, 0.1, 0.2]
+    pinn_err = main(measurement=0.0, error_sensitive=False)
+    de_err = []
+    de_es_err = []
+    for measurement_error in errors:
+        val_err = main(measurement=measurement_error, error_sensitive=False)
+        de_err.append(val_err)
+    for measurement_error in errors:
+        val_err = main(measurement=measurement_error, error_sensitive=True)
+        de_es_err.append(val_err)
+
+    print(pinn_err)
+    print(de_err)
+    print(de_es_err)
