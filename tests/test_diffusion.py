@@ -2,4 +2,4 @@ from experiments import diffusion
 
 
 def test_diffusion_experiment():
-    assert diffusion.main(300, "plots") < 0.1
+    assert diffusion.main(1000, "plots") < 3.0
