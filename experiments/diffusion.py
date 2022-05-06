@@ -34,7 +34,7 @@ D = 0.05
 
 # Analytical Solution of the Diffusion PDE --> d^2/dx^2 (P) = 1/D * d/dt (P)
 def P(x, t):
-    return (F * torch.cos(k * x) + E * torch.sin(k * x)) * torch.exp(-(k ** 2) * D * t)
+    return (F * torch.cos(k * x) + E * torch.sin(k * x)) * torch.exp(-(k**2) * D * t)
 
 
 class DiffusionModel(BaseModel):
@@ -210,15 +210,16 @@ class DiffusionModel(BaseModel):
         im1 = axs[0].imshow(
             im_data,
             interpolation="nearest",
-            extent=[0.0, 2.0 * np.pi, 0.0, 10.0],
+            extent=[0.0, 10.0, 0.0, 2.0 * np.pi],
             origin="lower",
             aspect="auto",
         )
         # axs[1].imshow(im_data_gt.detach().cpu().numpy())
         im2 = axs[1].imshow(
-            np.abs(im_data_gt - im_data),
+            # np.abs(im_data_gt - im_data),
+            im_data_gt,
             interpolation="nearest",
-            extent=[0.0, 2.0 * np.pi, 0.0, 10.0],
+            extent=[0.0, 10.0, 0.0, 2.0 * np.pi],
             origin="lower",
             aspect="auto",
             # vmin=0.0,
@@ -234,7 +235,7 @@ class DiffusionModel(BaseModel):
 
 
 def main(
-    n_epochs=10000, model_dir="/import/sgs.local/scratch/leiterrl/1d_diffusion"
+    n_epochs=20000, model_dir="/import/sgs.local/scratch/leiterrl/1d_diffusion"
 ) -> Number:
     num_layers = 4
     num_neurons = 20
@@ -268,13 +269,32 @@ def main(
     ic_axis_definition = torch.Tensor([False, True])
     ic = DirichletBC("initial_bc", geom, ic_axis_definition, tlims[0], ic_func)
 
-    boundary_conditions = [ic]
+    bc_axis_definition = torch.Tensor([True, False])
+
+    bc_bottom = DirichletBC(
+        "bc_bottom",
+        geom,
+        bc_axis_definition,
+        xlims[0],
+        ic_func,
+    )
+    bc_top = DirichletBC(
+        "bc_top",
+        geom,
+        bc_axis_definition,
+        xlims[1],
+        ic_func,
+    )
+
+    boundary_conditions = [ic, bc_bottom, bc_top]
 
     model = DiffusionModel(network, geom, config, boundary_conditions)
 
     model.setup_data(n_boundary, n_interior)
     model.setup_validation_data(n_validation)
     model.plot_dataset()
+
+    config.lr = 0.0004
 
     trainer = Trainer(model, config, model_dir)
 
