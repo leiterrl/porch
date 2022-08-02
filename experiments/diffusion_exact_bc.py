@@ -94,7 +94,7 @@ class DiffusionModel(BaseModel):
         #     labels = self.get_labels(loss_name)
         #     prediction = self.network.forward(data_in)
 
-        return torch.pow(prediction - labels, 2)
+        # return torch.pow(prediction - labels, 2)
 
     # TODO: complete ic (u and u_t)
     # def ic_loss(self, loss_name) -> torch.Tensor:
