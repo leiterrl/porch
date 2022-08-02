@@ -45,7 +45,7 @@ jobs:
   coverage:
     name: Generate and upload coverage
     runs-on: ubuntu-latest
-    
+
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v3
@@ -60,6 +60,8 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           python -m pip install -e .
           python -m pip install --upgrade coverage
+          mkdir plots
+          mkdir run
 
       - run: coverage run -m pytest
 
