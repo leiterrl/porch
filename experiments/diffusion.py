@@ -57,59 +57,6 @@ class DiffusionModel(BaseModel):
 
         return torch.pow(prediction - labels, 2)
 
-    # TODO: complete ic (u and u_t)
-    def ic_loss(self, loss_name) -> torch.Tensor:
-        """u_t(x,t=0) = 0"""
-        data_in = self.get_input(loss_name)
-        if len(data_in) == 0:
-            return torch.zeros([1] + list(data_in.shape)[1:], device=self.config.device)
-        labels = self.get_labels(loss_name)
-        prediction = self.network.forward(data_in)
-
-        return torch.pow(prediction - labels, 2)
-
-    # @torch.jit.script
-    # def jit_loss(jit_in, jit_labels, jit_prediction, jit_gu, jit_gux):
-    #     u_t = jit_gu[..., 1]
-    #     u_xx = jit_gux[..., 0]
-
-    #     D = 0.05
-    #     D_inv = 1.0 / D
-
-    #     f = u_xx - u_t * D_inv
-
-    #     return torch.pow(f - jit_labels, 2)
-
-    # # @torch.jit.script
-    # def interior_loss(self, loss_name) -> torch.Tensor:
-
-    #     data_in = self.get_input(loss_name)
-    #     if len(data_in) == 0:
-    #         return torch.zeros([1] + list(data_in.shape)[1:], device=self.config.device)
-    #     labels = self.get_labels(loss_name)
-    #     prediction = self.network.forward(data_in)
-
-    #     grad_u = gradient(prediction, data_in)
-    #     u_x = grad_u[..., 0]
-    #     # u_t = grad_u[..., 1]
-
-    #     grad_u_x = gradient(u_x, data_in)
-
-    #     @torch.jit.script
-    #     def jit_loss(jit_in, jit_labels, jit_prediction, jit_gu, git_gux):
-    #         u_t = jit_gu[..., 1]
-    #         u_xx = git_gux[..., 0]
-
-    #         D = 0.05
-    #         D_inv = 1.0 / D
-
-    #         f = u_xx - u_t * D_inv
-
-    #         return torch.pow(f - jit_labels, 2)
-
-    #     return jit_loss(data_in, labels, prediction, grad_u, grad_u_x)
-
-    # @torch.jit.script
     def interior_loss(self, loss_name: str) -> torch.Tensor:
 
         data_in = self.get_input(loss_name)
@@ -133,7 +80,6 @@ class DiffusionModel(BaseModel):
         f = u_xx - u_t * D_inv
 
         return torch.pow(f - labels, 2)
-        # return self.jit_loss(data_in, labels, prediction, grad_u, grad_u_x)
 
     def setup_losses(self) -> None:
         self.losses = {"boundary": self.boundary_loss, "interior": self.interior_loss}
@@ -175,7 +121,7 @@ class DiffusionModel(BaseModel):
             float(self.geometry.limits[1, 1]),
             n_validation,
         )
-        xx, tt = torch.meshgrid(x_linspace, t_linspace)
+        xx, tt = torch.meshgrid(x_linspace, t_linspace, indexing="ij")
         z = P(xx, tt)
 
         val_X = hstack([xx.flatten().unsqueeze(-1), tt.flatten().unsqueeze(-1)])
@@ -197,6 +143,7 @@ class DiffusionModel(BaseModel):
         validation_labels = self.validation_data[:, -self.network.d_out :]
 
         domain_shape = (200, 200)
+        axs: list[plt.Axes]
         fig, axs = plt.subplots(2, 1, figsize=[12, 6], sharex=True)
         self.network.eval()
         prediction = self.network.forward(validation_in)
@@ -214,16 +161,12 @@ class DiffusionModel(BaseModel):
             origin="lower",
             aspect="auto",
         )
-        # axs[1].imshow(im_data_gt.detach().cpu().numpy())
         im2 = axs[1].imshow(
-            # np.abs(im_data_gt - im_data),
             im_data_gt,
             interpolation="nearest",
             extent=[0.0, 10.0, 0.0, 2.0 * np.pi],
             origin="lower",
             aspect="auto",
-            # vmin=0.0,
-            # vmax=1.0,
         )
         fig.colorbar(im1, extend="both", shrink=0.9, ax=axs[0])
         fig.colorbar(im2, extend="both", shrink=0.9, ax=axs[1])
