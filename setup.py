@@ -27,6 +27,7 @@ setup(
         "physics-based",
         "physics-informed",
         "neural network",
+        "scientific machine learning",
     ],
     python_requires=">=3.6",
     classifiers=[
