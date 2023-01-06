@@ -70,9 +70,12 @@ class DataWaveEquationZeroParametric:
         grid_x = np.linspace(-1.0, 1.0, self.fom.num_intervals + 1)
         grid_t = np.linspace(0.0, self.fom.T, self.fom.time_stepper.nt)
 
-        tt, xx, ee = np.meshgrid(grid_t, grid_x, wave_speeds, indexing="ij")
+        tt, xx, ee = np.meshgrid(grid_t, grid_x, wave_speeds)
         return torch.as_tensor(
-            np.vstack([tt.ravel(), xx.ravel(), ee.ravel()]).T, dtype=torch.float32
+            np.vstack(
+                [tt.ravel(order="F"), xx.ravel(order="F"), ee.ravel(order="F")]
+            ).T,
+            dtype=torch.float32,
         )
 
     def get_data_rom_parametric(self, wave_speeds):

@@ -53,7 +53,6 @@ class PlotWaveEqModel(WaveEquationPINN):
         validation_labels = self.validation_data[:, -self.network.d_out :]
 
         domain_shape = (-1, self.data.fom.num_intervals + 1)
-        # TODO simplify by flattening
         domain_extent = self.geometry.limits.flatten()
         sns.color_palette("mako", as_cmap=True)
         cmap = "mako_r"

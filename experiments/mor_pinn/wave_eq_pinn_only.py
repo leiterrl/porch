@@ -97,12 +97,11 @@ class WaveEquationPINN(WaveEquationBaseModel):
 
         self.set_dataset(complete_dataset)
 
-    def plot_validation(self):
+    def plot_validation(self, writer, iteration):
         validation_in = self.validation_data[:, : self.network.d_in]
         validation_labels = self.validation_data[:, -self.network.d_out :]
 
         domain_shape = (-1, (self.data.fom.num_intervals + 1) // 6)
-        # TODO simplify by flattening
         domain_extent = self.geometry.limits.flatten()
         sns.color_palette("mako", as_cmap=True)
         cmap = "mako_r"
@@ -183,6 +182,8 @@ def run_model(config: PorchConfig):
     data = DataWaveEquationZero()
     X_init, u_init = data.get_initial_cond_exact(config.wave_speed)
     initial_data = hstack([X_init, u_init])
+    rnd_indices = np.random.choice(initial_data.shape[0], config.n_boundary // 3)
+    initial_data = initial_data[rnd_indices, :]
     ic = DiscreteBC("initial_bc", geom, initial_data)
 
     bc_axis = torch.Tensor([False, True])
@@ -236,6 +237,10 @@ def main():
 
     if args.lra and args.opt:
         raise RuntimeError("Can't enable both LRA and optimal weighting")
+    if args.lra and args.dirichlet:
+        raise RuntimeError("Can't enable both LRA and dirichlet weighting")
+    if args.dirichlet and args.opt:
+        raise RuntimeError("Can't enable both dirichlet and optimal weighting")
 
     if args.lra and args.batchsize:
         assert (
@@ -247,7 +252,7 @@ def main():
     else:
         device = torch.device("cpu")
 
-    config = PorchConfig(device=device, lra=args.lra)
+    config = PorchConfig(device=device, lra=args.lra, dirichlet=args.dirichlet)
     config.weight_norm = True
     config.normalize_input = False
     config.epochs = args.epochs

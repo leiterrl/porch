@@ -109,11 +109,12 @@ def run_model(config: PorchConfig):
     model.setup_data(config.n_boundary, config.n_interior, config.n_rom)
     model.setup_validation_data()
     model.plot_dataset("rom")
-    model.plot_boundary_data("rom")
+    # model.plot_boundary_data("rom")
+    # model.plot_rom_data("rom")
 
-    trainer = Trainer(model, config, config.model_dir)
+    # trainer = Trainer(model, config, config.model_dir)
 
-    trainer.train()
+    # trainer.train()
 
 
 def main():

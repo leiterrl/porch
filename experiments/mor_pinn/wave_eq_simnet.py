@@ -106,7 +106,6 @@ class WaveEquationSimNet(WaveEquationBaseModel):
         deltaX = 0.01
         x = np.arange(0, np.pi, deltaX)
         domain_shape = (-1, x.shape[0])
-        # TODO simplify by flattening
         domain_extent = self.geometry.limits.flatten()
         sns.color_palette("mako", as_cmap=True)
         cmap = "mako_r"

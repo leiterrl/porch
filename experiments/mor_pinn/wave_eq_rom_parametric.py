@@ -28,6 +28,7 @@ from porch.geometry import Geometry
 from porch.network import FullyConnected
 from porch.util import hstack
 from porch.util import parse_args
+from porch.util import fig_to_rgb_array
 
 
 import seaborn as sns
@@ -138,9 +139,9 @@ class WaveEquationParametric(WaveEquationBaseModel):
         # Rom Data
 
         # X = self.data.get_input()
-        # TODO: remove magic number
         X = self.data.get_input_parametric(self.espace)
-        u = self.data.get_data_rom_parametric(self.espace)
+        # u = self.data.get_data_rom_parametric(self.espace)
+        u = self.data.get_data_fom_parametric(self.espace)
 
         # decrease dataset size
         rand_rows = torch.randperm(X.shape[0])[:n_rom]
@@ -173,12 +174,11 @@ class WaveEquationParametric(WaveEquationBaseModel):
 
         self.validation_data = hstack([val_X, val_u]).to(device=self.config.device)
 
-    def plot_validation(self):
+    def plot_validation(self, writer=None, total_steps=None):
         validation_in = self.validation_data[:, : self.network.d_in]
         validation_labels = self.validation_data[:, -self.network.d_out :]
 
         # domain_shape = (-1, (self.data.fom.num_intervals + 1) // 6)
-        # # TODO simplify by flattening
         # domain_extent = self.geometry.limits.flatten()
         # sns.color_palette("mako", as_cmap=True)
         # cmap = "mako_r"
@@ -234,8 +234,8 @@ class WaveEquationParametric(WaveEquationBaseModel):
         fig, axs = plt.subplots(2, 2, figsize=[12, 6], sharex=True)
         self.network.eval()
         # with torch.no_grad():
-        prediction_1 = self.network.forward(validation_in[::18, :])
-        prediction_2 = self.network.forward(validation_in[17::18, :])
+        prediction_1 = self.network.forward(validation_in[:500500, :])
+        prediction_2 = self.network.forward(validation_in[-500500:, :])
         # losses = loss_burgers(prediction, val_input, val_output, params={'m' : 1.0, 'k' : 1.0, 'nu': 0.01/np.pi, 'diff_nu': 0.1, 'ref_weight': 1.0}, model_input_mask=torch.ones_like(val_output).cuda())
         self.network.train()
 
@@ -347,6 +347,38 @@ class WaveEquationParametric(WaveEquationBaseModel):
         #     video_array[0, t, :, :, :] = np.transpose(frame_data, (2,0,1))
 
         # writer.add_video('Result_video', video_array, total_steps, fps=9)
+
+        video_array = np.zeros(
+            shape=(1, n_param_samples, 3, 3 * 100, 6 * 100), dtype=np.uint8
+        )
+
+        for t in range(n_param_samples):
+            self.network.eval()
+            # with torch.no_grad():
+            prediction = self.network.forward(
+                validation_in[t * 500500 : (t + 1) * 500500, :]
+            )
+            # losses = loss_burgers(prediction, val_input, val_output, params={'m' : 1.0, 'k' : 1.0, 'nu': 0.01/np.pi, 'diff_nu': 0.1, 'ref_weight': 1.0}, model_input_mask=torch.ones_like(val_output).cuda())
+            self.network.train()
+            im_data = prediction.detach().cpu().numpy()[:]
+            im_data = im_data.reshape(domain_shape)
+            tmp_fig, tmp_axs = plt.subplots(1, 1, figsize=[6, 3])
+            tmp_axs.imshow(
+                np.flip(im_data.T, axis=0),
+                interpolation="nearest",
+                extent=[0.0, 2.0, -1.0, 1.0],
+                origin="lower",
+                aspect="auto",
+                vmin=0.0,
+                vmax=1.0,
+            )
+            frame_data = fig_to_rgb_array(tmp_fig)
+            # writer.add_figure('Result', tmp_fig, t)
+            plt.close(tmp_fig)
+            video_array[0, t, :, :, :] = np.transpose(frame_data, (2, 0, 1))
+
+        writer.add_video("Result_video", video_array, total_steps, fps=9)
+
         return fig
 
     def plot_dataset(self, name: str) -> None:
@@ -404,6 +436,33 @@ class WaveEquationParametric(WaveEquationBaseModel):
 
         ax.legend()
         plt.savefig(f"plots/boundary_{name}.png")
+
+    def plot_rom_data(self, name: str) -> None:
+
+        fig, axs = plt.subplots(1, 2, figsize=[12, 6], sharey=True)
+
+        data_in = self.get_input("rom").cpu().numpy()
+        labels = self.get_labels("rom").cpu().numpy()
+
+        mask_slow = data_in[:, 2] == 0.1
+        mask_fast = data_in[:, 2] == 0.2
+
+        axs[0].scatter(
+            data_in[:500500, 0],
+            data_in[:500500, 1],
+            c=labels[:500500, 0],
+            label="rom",
+            alpha=0.5,
+        )
+
+        axs[1].scatter(
+            data_in[mask_fast, 0],
+            data_in[mask_fast, 1],
+            c=labels[mask_fast, 0],
+            label="rom",
+            alpha=0.5,
+        )
+        plt.savefig(f"plots/rom_{name}.png")
 
 
 def run_model(config: PorchConfig):
@@ -493,6 +552,7 @@ def run_model(config: PorchConfig):
     model.setup_validation_data()
     # model.plot_dataset("rom_parametric")
     # model.plot_boundary_data("rom_paramteric")
+    model.plot_rom_data("rom_parametric")
 
     trainer = Trainer(model, config, config.model_dir)
 

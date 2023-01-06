@@ -52,16 +52,6 @@ class WaveEquationBaseModel(BaseModel):
         labels = self.get_labels(loss_name)
         prediction = self.network.forward(data_in)
 
-        # grad_u = gradient(prediction, data_in)
-        # u_x = grad_u[..., 1]
-        # u_t = grad_u[..., 0]
-
-        # # TODO: fix to meet problem setup
-        # gradMagnitude = torch.mean(
-        #     torch.pow(torch.add(torch.abs(u_x), torch.abs(u_t)), 2)
-        # )
-        # self.loss_weights[loss_name] = 1.0 / gradMagnitude
-
         return torch.pow(prediction - labels, 2)
 
     # TODO: complete ic (u and u_t)
@@ -102,23 +92,7 @@ class WaveEquationBaseModel(BaseModel):
         grad_u_t = gradient(u_t, data_in)
         u_tt = grad_u_t[..., 0].unsqueeze(1)
 
-        # TODO: move wave_speed to tensor
-        # f = (
-        #     u_tt
-        #     - torch.pow(
-        #         torch.as_tensor(
-        #             self.wave_speed, device=self.config.device, dtype=torch.float32
-        #         ),
-        #         2,
-        #     )
-        #     * u_xx
-        # )
-        f = u_tt - self.wave_speed ** 2 * u_xx
-
-        # gradMagnitude = torch.mean(
-        #     torch.pow(torch.add(torch.abs(u_x), torch.abs(u_t)), 2)
-        # )
-        # self.loss_weights[loss_name] = 1.0 / gradMagnitude
+        f = u_tt - self.wave_speed**2 * u_xx
 
         return torch.pow(f - labels, 2)
 
@@ -188,6 +162,7 @@ class WaveEquationBaseModel(BaseModel):
 
         # X = self.data.get_input()
         X, u = self.data.get_data_rom(self.wave_speed, self.config.subsample_rom)
+        # u = self.data.get_data_fom(self.wave_speed)
 
         # decrease dataset size
         rand_rows = torch.randperm(X.shape[0])[:n_rom]
@@ -309,6 +284,22 @@ class WaveEquationBaseModel(BaseModel):
 
         axs.legend()
         plt.savefig(f"plots/boundary_{name}.png")
+
+    def plot_rom_data(self, name: str) -> None:
+
+        fig, ax = plt.subplots(1, 1, figsize=[12, 6])
+
+        data_in = self.get_input("rom").cpu().numpy()
+        labels = self.get_labels("rom").cpu().numpy()
+        ax.scatter(
+            data_in[:, 0],
+            data_in[:, 1],
+            c=labels[:, 0],
+            label="rom",
+            alpha=0.5,
+        )
+
+        plt.savefig(f"plots/rom_{name}.png")
 
 
 class WaveEquationExplicitDataModel(WaveEquationBaseModel):
