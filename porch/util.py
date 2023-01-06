@@ -7,26 +7,6 @@ import argparse
 from torch.jit.annotations import Optional, List
 from torch import Tensor
 
-from torch.utils.tensorboard import SummaryWriter
-from torch.utils.tensorboard.summary import hparams
-
-# from tensorboardX.utils.tensorboard.summary import hparams
-# from tensorboardX import SummaryWriter
-
-
-class CorrectedSummaryWriter(SummaryWriter):
-    def add_hparams(self, hparam_dict, metric_dict):
-        torch._C._log_api_usage_once("tensorboard.logging.add_hparams")
-        if type(hparam_dict) is not dict or type(metric_dict) is not dict:
-            raise TypeError("hparam_dict and metric_dict should be dictionary.")
-        exp, ssi, sei = hparams(hparam_dict, metric_dict)
-
-        self.file_writer.add_summary(exp)
-        self.file_writer.add_summary(ssi)
-        self.file_writer.add_summary(sei)
-        for k, v in metric_dict.items():
-            self.add_scalar(k, v)
-
 
 # TODO: handle non-scalar case
 # def gradient(y, x):
@@ -73,6 +53,14 @@ def gradient(y: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
     return grad  # grad can be None here, so it is Optional[torch.Tensor]
 
 
+# def laplacian(fn_model, x: torch.Tensor) -> torch.Tensor:
+#     laplacian_tensor = torch.zeros(x.shape[1]) #array to store values of laplacian
+
+#     for i, xi in enumerate(x.T):
+#         hess = torch.autograd.functional.hessian(fn_model, xi.unsqueeze(0), create_graph=True)
+#         laplacian_tensor[i] = torch.diagonal(hess.view(N, N) offset=0).sum()
+
+
 def hstack(tensor_tuple):
     return torch.cat(tensor_tuple, dim=1)
 
@@ -114,7 +102,9 @@ def get_regular_grid(N: tuple, bounds: torch.Tensor, device=None) -> torch.Tenso
         linspaces.append(torch.linspace(bounds[d, 0], bounds[d, 1], n))
         # linspaces.append(torch.linspace(-1.0, 1.0, n))
 
-    regular_grid = torch.stack(torch.meshgrid(*linspaces), -1).reshape(-1, len(N))
+    regular_grid = torch.stack(torch.meshgrid(*linspaces, indexing="ij"), -1).reshape(
+        -1, len(N)
+    )
 
     # return regular_grid.cuda()
     return regular_grid.to(device)
@@ -132,7 +122,6 @@ def get_random_samples_circle(
     return torch.as_tensor(samples, device=device, dtype=torch.float32)
 
 
-# TODO: use torch functions
 def get_random_samples(bounds: torch.Tensor, n: int, device=None) -> torch.Tensor:
     low = [bound[0] for bound in bounds]
     high = [bound[1] for bound in bounds]
@@ -159,7 +148,7 @@ def relative_l2_error(pred, truth):
         # denominator = torch.mean(torch.square(truth - torch.mean(truth)))
         nominator = torch.linalg.norm(truth - pred)
         denominator = torch.linalg.norm(truth)
-        if denominator > 0.0:
+        if not torch.isclose(denominator, torch.zeros_like(denominator)):
             return nominator / denominator
         else:
             print(
