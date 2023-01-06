@@ -133,7 +133,19 @@ def main():
 
     config = PorchConfig(device=device, lra=args.lra)
 
-    config.model_dir = f"/import/sgs.local/scratch/leiterrl/wave_eq_rom_{args.nbases}"
+    if args.lra:
+        config.model_dir = (
+            f"/import/sgs.local/scratch/leiterrl/wave_eq_rom_lra_{args.nbases}"
+        )
+    elif args.opt:
+        config.model_dir = (
+            f"/import/sgs.local/scratch/leiterrl/wave_eq_rom_opt_{args.nbases}"
+        )
+    else:
+        config.model_dir = (
+            f"/import/sgs.local/scratch/leiterrl/wave_eq_rom_equal_{args.nbases}"
+        )
+
     config.n_layers = 5
     config.n_neurons = 20
     config.weight_norm = False

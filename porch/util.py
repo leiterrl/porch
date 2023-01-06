@@ -3,6 +3,10 @@ from enum import Enum
 import numpy as np
 import argparse
 
+# from typing import Optional, List
+from torch.jit.annotations import Optional, List
+from torch import Tensor
+
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.tensorboard.summary import hparams
 
@@ -25,12 +29,48 @@ class CorrectedSummaryWriter(SummaryWriter):
 
 
 # TODO: handle non-scalar case
-def gradient(y, x):
-    grad_outputs = torch.ones_like(y)
+# def gradient(y, x):
+#     grad_outputs = torch.ones_like(y)
+#     grad = torch.autograd.grad(
+#         [y], [x], grad_outputs=[grad_outputs], create_graph=True, retain_graph=True
+#     )[0]
+#     return grad
+
+
+# # TODO: handle non-scalar case
+# @torch.jit.script
+# def gradient(y, x):
+#     # grad_outputs = [torch.ones_like(y)]
+#     grad_outputs = torch.jit.annotate(Optional[Tensor], torch.ones_like(y))
+#     # grad_outputs = torch.jit.annotate(Optional[List[Optional[Tensor]]], [torch.ones_like(y)]) -> "Expected a List type hint but instead got Optional[List[Optional[Tensor]]]"
+#     grad = torch.autograd.grad(
+#         [y], [x], [grad_outputs], create_graph=True, retain_graph=True
+#     )[0]
+#     return grad
+
+
+@torch.jit.script
+def gradient(y: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    grad_outputs: List[Optional[torch.Tensor]] = [torch.ones_like(y)]
+    # grad_outputs = [torch.ones_like(y)]
+    # grad_outputs = torch.jit.annotate(Optional[Tensor], [torch.ones_like(y)])
     grad = torch.autograd.grad(
-        y, [x], grad_outputs=grad_outputs, create_graph=True, retain_graph=True
-    )[0]
-    return grad
+        [
+            y,
+        ],
+        [x],
+        grad_outputs=grad_outputs,
+        create_graph=True,
+    )
+
+    assert grad is not None
+
+    # optional type refinement using an if statement
+    grad = grad[0]
+
+    assert grad is not None
+
+    return grad  # grad can be None here, so it is Optional[torch.Tensor]
 
 
 def hstack(tensor_tuple):
@@ -39,6 +79,13 @@ def hstack(tensor_tuple):
 
 def vstack(tensor_tuple):
     return torch.cat(tensor_tuple, dim=0)
+
+
+def fig_to_rgb_array(fig):
+    fig.canvas.draw()
+    image_array = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+    image_array = image_array.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+    return image_array
 
 
 class SamplingType(Enum):
@@ -73,6 +120,19 @@ def get_regular_grid(N: tuple, bounds: torch.Tensor, device=None) -> torch.Tenso
     return regular_grid.to(device)
 
 
+# TODO: use torch functions
+def get_random_samples_circle(
+    center: tuple, r: float, n: int, device=None
+) -> torch.Tensor:
+    r_array = r * np.sqrt(np.random.uniform(size=n))
+    theta_array = np.random.uniform(0.0, 2.0 * np.pi, size=n)
+    x = center[0] + r_array * np.cos(theta_array)
+    y = center[1] + r_array * np.sin(theta_array)
+    samples = np.vstack([x, y]).T
+    return torch.as_tensor(samples, device=device, dtype=torch.float32)
+
+
+# TODO: use torch functions
 def get_random_samples(bounds: torch.Tensor, n: int, device=None) -> torch.Tensor:
     low = [bound[0] for bound in bounds]
     high = [bound[1] for bound in bounds]
@@ -95,8 +155,10 @@ def relative_l2_error(pred, truth):
             error is returned.
     """
     if len(pred) > 0 and len(truth) > 0:
-        nominator = torch.mean(torch.square(pred - truth))
-        denominator = torch.mean(torch.square(truth - torch.mean(truth)))
+        # nominator = torch.mean(torch.square(pred - truth))
+        # denominator = torch.mean(torch.square(truth - torch.mean(truth)))
+        nominator = torch.linalg.norm(truth - pred)
+        denominator = torch.linalg.norm(truth)
         if denominator > 0.0:
             return nominator / denominator
         else:
@@ -149,6 +211,11 @@ def parse_args():
     )
     parser.add_argument(
         "--lra",
+        action="store_true",
+        help="Use learning rate annealing",
+    )
+    parser.add_argument(
+        "--dirichlet",
         action="store_true",
         help="Use learning rate annealing",
     )

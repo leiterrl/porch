@@ -17,6 +17,12 @@ class PorchConfig:
     epochs: int = 10000
     print_freq: int = 100
     summary_freq: int = 1000
+    dtype: torch.dtype = torch.float32
+
+    exp_decay: bool = False
+    exp_decay_gamme: float = 0.9977
+
+    dirichlet: bool = False
 
     wave_speed: float = 1.0
 

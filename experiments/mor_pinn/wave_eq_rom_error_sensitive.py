@@ -148,7 +148,6 @@ def main():
         random.seed(seed)
         np.random.seed(0)
 
-    model_dir = f"/import/sgs.local/scratch/leiterrl/wave_eq_rom_error_sensitive_lra_{args.nbases}"
     num_layers = 5
     num_neurons = 20
     weight_norm = False
@@ -163,6 +162,14 @@ def main():
         device = torch.device("cpu")
 
     config = PorchConfig(device=device, lra=args.lra)
+
+    if args.lra:
+        config.model_dir = f"/import/sgs.local/scratch/leiterrl/wave_eq_rom_error_sensitive_con_lra_{args.nbases}"
+    elif args.opt:
+        config.model_dir = f"/import/sgs.local/scratch/leiterrl/wave_eq_rom_error_sensitive_con_opt_{args.nbases}"
+    else:
+        config.model_dir = f"/import/sgs.local/scratch/leiterrl/wave_eq_rom_error_sensitive_con_equal_{args.nbases}"
+
     config.deterministic = args.determ
     config.epochs = args.epochs
     config.optimal_weighting = args.opt
@@ -225,7 +232,7 @@ def main():
     # model.plot_dataset("rom")
     # model.plot_boundary_data("rom")
 
-    trainer = Trainer(model, config, model_dir)
+    trainer = Trainer(model, config, config.model_dir)
 
     trainer.train()
 

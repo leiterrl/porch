@@ -33,7 +33,7 @@ sns.set_theme(style="white", palette="mako")
 sns.color_palette("mako", as_cmap=True)
 
 
-class WaveEquationPINN(WaveEquationBaseModel):
+class WaveEquationSimNet(WaveEquationBaseModel):
     def rom_loss(self, loss_name):
         raise NotImplementedError("This should not be called on PINN only Model")
 
@@ -66,26 +66,8 @@ class WaveEquationPINN(WaveEquationBaseModel):
         )
         interior_data = hstack([interior_data, interior_labels])
 
-        initial_input = self.data.get_input().to(device=self.config.device)[
-            0 : self.data.fom.num_intervals + 1, :
-        ]
-        # downsample, TODO: this should be done in a more unified way, i guess
-        len_data = len(initial_input)
-        if n_boundary < len_data:
-            sampling_points = np.linspace(0, len_data - 1, n_boundary, dtype=int)
-            initial_input = initial_input[sampling_points]
-        elif n_boundary == len_data:
-            pass
-        else:
-            raise ValueError(
-                "Cannot generate n_sample={} from data of len: {}".format(
-                    n_boundary, len_data
-                )
-            )
-        ic_t_labels = torch.zeros(
-            [initial_input.shape[0], 1], device=self.config.device, dtype=torch.float32
-        )
-        ic_t_data = hstack([initial_input, ic_t_labels])
+        ic_t_data = bc_tensors[0].detach().clone()
+        ic_t_data[:, 2] = 0.0
 
         dataset_dict = {
             "interior": interior_data,
@@ -97,11 +79,33 @@ class WaveEquationPINN(WaveEquationBaseModel):
 
         self.set_dataset(complete_dataset)
 
+    def setup_validation_data(self) -> None:
+        L = np.pi
+        deltaT = 0.01
+        deltaX = 0.01
+        x = np.arange(0, L, deltaX)
+        t = np.arange(0, 2 * L, deltaT)
+        # T, X = np.meshgrid(t, x)
+        T, X = np.meshgrid(t, x, indexing="ij")
+        # return torch.as_tensor(
+        #     np.vstack([tt.ravel(), xx.ravel()]).T, dtype=torch.float32
+        # )
+
+        X = torch.as_tensor(X.ravel(), dtype=torch.float32)
+        T = torch.as_tensor(T.ravel(), dtype=torch.float32)
+        u = torch.as_tensor(np.sin(X) * (np.cos(T) + np.sin(T)), dtype=torch.float32)
+        self.validation_data = vstack([T, X, u]).to(device=self.config.device).T
+
+        # val_X, val_u = self.data.get_explicit_solution_data(self.wave_speed, True)
+        # self.validation_data = hstack([val_X, val_u]).to(device=self.config.device)
+
     def plot_validation(self):
         validation_in = self.validation_data[:, : self.network.d_in]
         validation_labels = self.validation_data[:, -self.network.d_out :]
 
-        domain_shape = (-1, (self.data.fom.num_intervals + 1) // 6)
+        deltaX = 0.01
+        x = np.arange(0, np.pi, deltaX)
+        domain_shape = (-1, x.shape[0])
         # TODO simplify by flattening
         domain_extent = self.geometry.limits.flatten()
         sns.color_palette("mako", as_cmap=True)
@@ -156,34 +160,27 @@ class WaveEquationPINN(WaveEquationBaseModel):
 
 
 def run_model(config: PorchConfig):
-    xlims = (-1.0, 1.0)
-    tlims = (0.0, 2.0)
+    L = np.pi
+    xlims = (0.0, L)
+    tlims = (0.0, 2.0 * L)
 
-    # 2D in (x,t) -> u 1D out
-    if config.deterministic:
-        network = torch.load("./cache/model.pth")
-    else:
-        network = FullyConnected(
-            2, 1, config.n_layers, config.n_neurons, config.weight_norm
-        )
-        torch.save(network, "./cache/model.pth", _use_new_zipfile_serialization=False)
+    network = FullyConnected(
+        2, 1, config.n_layers, config.n_neurons, config.weight_norm
+    )
+    torch.save(network, "./cache/model.pth", _use_new_zipfile_serialization=False)
     network.to(device=config.device)
-
-    if config.normalize_input:
-        print("Input normalization enabled")
-        # TODO: don't hardcode mean values
-        # mean_t: 1.0, mean_x: 0.0
-        mean = torch.as_tensor([[1.0, 0.0]], device=config.device, dtype=torch.float32)
-        # not really standard deviation but rather domain size
-        std = torch.as_tensor([[2.0, 2.0]], device=config.device, dtype=torch.float32)
-        network.set_normalization(mean, std)
 
     geom = Geometry(torch.tensor([tlims, xlims]))
 
-    data = DataWaveEquationZero()
-    X_init, u_init = data.get_initial_cond_exact(config.wave_speed)
-    initial_data = hstack([X_init, u_init])
-    ic = DiscreteBC("initial_bc", geom, initial_data)
+    ic_axis = torch.Tensor([True, False])
+    ic = DirichletBC(
+        "initial_bc",
+        geom,
+        ic_axis,
+        tlims[0],
+        lambda x: torch.unsqueeze(torch.sin(x[:, 1]), 1),
+        False,
+    )
 
     bc_axis = torch.Tensor([False, True])
     bc_upper = DirichletBC(
@@ -195,26 +192,19 @@ def run_model(config: PorchConfig):
 
     boundary_conditions = [ic, bc_upper, bc_lower]
 
-    model = WaveEquationPINN(
+    model = WaveEquationSimNet(
         network, geom, config, config.wave_speed, boundary_conditions
     )
 
-    if config.optimal_weighting:
-        ## optimal pinn weighting
-        print("Optimal weighting")
-        model.loss_weights["ic_t"] = 0.9999560910636492
-        model.loss_weights["boundary"] = 0.9999560910636492
-        model.loss_weights["interior"] = 4.390893635083135e-05
-    else:
-        ## equal weights
-        model.loss_weights["ic_t"] = 1.0
-        model.loss_weights["boundary"] = 1.0
-        model.loss_weights["interior"] = 1.0
+    ## equal weights
+    model.loss_weights["ic_t"] = 1.0
+    model.loss_weights["boundary"] = 1.0
+    model.loss_weights["interior"] = 1.0
 
     model.setup_data(config.n_boundary, config.n_interior)
     model.setup_validation_data()
-    # model.plot_dataset("pinn")
-    # model.plot_boundary_data("pinn")
+    model.plot_dataset("pinn_simnet")
+    model.plot_boundary_data("pinn_simnet")
 
     trainer = Trainer(model, config, config.model_dir)
 
@@ -254,7 +244,7 @@ def main():
     config.wave_speed = 1.0
     config.n_boundary = args.nboundary
     config.n_interior = args.ninterior
-    config.model_dir = "/import/sgs.local/scratch/leiterrl/wave_eq_pinn"
+    config.model_dir = "/import/sgs.local/scratch/leiterrl/wave_eq_simnet"
     config.n_neurons = n_neurons
     config.n_layers = n_layers
     config.deterministic = args.determ
