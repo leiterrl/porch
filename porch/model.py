@@ -62,6 +62,11 @@ class BaseModel:
         d_out = self.network.d_out
         return self.dataset[name][:, -d_out:]
 
+    # TODO: possibly merge with get_labels above (replace)
+    def get_labels_neumann(self, name: str):
+        d_in = self.network.d_in
+        return self.dataset[name][:, d_in:]
+
     def setup_losses(self):
         raise NotImplementedError
 
@@ -78,7 +83,7 @@ class BaseModel:
 
     def set_dataset(self, dataset: NamedTensorDataset):
         for name, value in dataset._dataset.items():
-            if value.shape[1] != self.network.d_in + self.network.d_out:
+            if value.shape[1] < self.network.d_in + self.network.d_out:
                 raise RuntimeError(
                     f"Dataset {name} column number has to equal d_in + d_out."
                 )
@@ -102,12 +107,12 @@ class BaseModel:
         validation_labels = self.validation_data[:, -self.network.d_out :]
 
         # decrease dataset size
-        decrease_validation = False
-        n_validation = int(1e5)
-        rand_rows = torch.randperm(validation_in.shape[0])[:n_validation]
-        if decrease_validation:
-            validation_in = validation_in[rand_rows, :]
-            validation_labels = validation_labels[rand_rows]
+        # decrease_validation = False
+        # n_validation = int(1e5)
+        # rand_rows = torch.randperm(validation_in.shape[0])[:n_validation]
+        # if decrease_validation:
+        #     validation_in = validation_in[rand_rows, :]
+        #     validation_labels = validation_labels[rand_rows]
 
         self.network.eval()
         prediction = self.network.forward(validation_in)
