@@ -5,6 +5,11 @@ from porch.boundary_conditions import BoundaryCondition
 from porch.dataset import NamedTensorDataset
 from experiments.mor_pinn.wave_mor_data_generation import DataWaveEquationZero
 
+try:
+    from torch import hstack, vstack
+except ImportError:
+    from porch.util import hstack, vstack
+
 
 # logging.basicConfig(level=logging.DEBUG)
 
@@ -33,19 +38,17 @@ class WaveEquationBaseModel(BaseModel):
         config: PorchConfig,
         wave_speed: float,
         boundary_conditions: "list[BoundaryCondition]",
-        noise: float = 0.0,
-        nointerior: bool = False,
     ):
-        self.nointerior = nointerior
         super().__init__(network, geometry, config, boundary_conditions)
         self.wave_speed = wave_speed
-        self.noise = noise
-        self.data = DataWaveEquationZero()
+        self.data = DataWaveEquationZero(self.config.n_bases)
 
     # TODO: only spatial boundary
     def boundary_loss(self, loss_name):
         """u(x=lb,t) = u(x=ub,t) = 0"""
         data_in = self.get_input(loss_name)
+        if len(data_in) == 0:
+            return torch.zeros([1] + list(data_in.shape)[1:], device=self.config.device)
         labels = self.get_labels(loss_name)
         prediction = self.network.forward(data_in)
 
@@ -65,11 +68,13 @@ class WaveEquationBaseModel(BaseModel):
     def ic_loss(self, loss_name):
         """u_t(x,t=0) = 0"""
         data_in = self.get_input(loss_name)
+        if len(data_in) == 0:
+            return torch.zeros([1] + list(data_in.shape)[1:], device=self.config.device)
         labels = self.get_labels(loss_name)
         prediction = self.network.forward(data_in)
 
         grad_u = gradient(prediction, data_in)
-        u_t = grad_u[..., 0]
+        u_t = grad_u[..., 0].unsqueeze(1)
         # u_x = grad_u[..., 1]
 
         # gradMagnitude = torch.mean(
@@ -83,19 +88,19 @@ class WaveEquationBaseModel(BaseModel):
         """u_tt - \\mu² * u_xx = 0"""
         data_in = self.get_input(loss_name)
         if len(data_in) == 0:
-            return torch.tensor([], device=self.device)
+            return torch.zeros([1] + list(data_in.shape)[1:], device=self.config.device)
         labels = self.get_labels(loss_name)
         prediction = self.network.forward(data_in)
 
         grad_u = gradient(prediction, data_in)
-        u_x = grad_u[..., 1]
-        u_t = grad_u[..., 0]
+        u_x = grad_u[..., 1].unsqueeze(1)
+        u_t = grad_u[..., 0].unsqueeze(1)
 
         grad_u_x = gradient(u_x, data_in)
-        u_xx = grad_u_x[..., 1]
+        u_xx = grad_u_x[..., 1].unsqueeze(1)
 
         grad_u_t = gradient(u_t, data_in)
-        u_tt = grad_u_t[..., 0]
+        u_tt = grad_u_t[..., 0].unsqueeze(1)
 
         # TODO: move wave_speed to tensor
         # f = (
@@ -119,24 +124,26 @@ class WaveEquationBaseModel(BaseModel):
 
     def rom_loss(self, loss_name):
         data_in = self.get_input(loss_name)
+        if len(data_in) == 0:
+            return torch.zeros([1] + list(data_in.shape)[1:], device=self.config.device)
         labels = self.get_labels(loss_name)
         prediction = self.network.forward(data_in)
 
-        mse_cutoff_squared = self.noise ** 2
         mse_diff_squared = torch.pow(prediction - labels, 2)
-        mse_diff_squared[mse_diff_squared < mse_cutoff_squared] = 0.0
 
         return mse_diff_squared
 
     def setup_losses(self):
         self.losses = {
             "boundary": self.boundary_loss,
+            "ic_t": self.ic_loss,
+            "interior": self.interior_loss,
             "rom": self.rom_loss,
         }
-        if not self.nointerior:
-            self.losses["interior"] = self.interior_loss
 
     def setup_data(self, n_boundary: int, n_interior: int, n_rom: int):
+        # spread n_boudary evenly over all boundaries (including initial condition)
+        n_boundary = n_boundary // (len(self.boundary_conditions) + 1)
         bc_tensors = []
         logging.info("Generating BC data...")
         for bc in self.boundary_conditions:
@@ -145,54 +152,69 @@ class WaveEquationBaseModel(BaseModel):
         boundary_data = torch.cat(bc_tensors)
 
         logging.info("Generating interior data...")
-        if not self.nointerior:
-            interior_data = self.geometry.get_random_samples(
-                n_interior, device=self.config.device
+
+        interior_data = self.geometry.get_random_samples(
+            n_interior, device=self.config.device
+        )
+        interior_labels = torch.zeros(
+            [interior_data.shape[0], 1],
+            device=self.config.device,
+            dtype=torch.float32,
+        )
+        interior_data = hstack([interior_data, interior_labels])
+
+        initial_input = self.data.get_input().to(device=self.config.device)[
+            0 : self.data.fom.num_intervals + 1, :
+        ]
+        # downsample, TODO: this should be done in a more unified way, i guess
+        len_data = len(initial_input)
+        if n_boundary < len_data:
+            sampling_points = np.linspace(0, len_data - 1, n_boundary, dtype=int)
+            initial_input = initial_input[sampling_points]
+        elif n_boundary == len_data:
+            pass
+        else:
+            raise ValueError(
+                "Cannot generate n_sample={} from data of len: {}".format(
+                    n_boundary, len_data
+                )
             )
-            interior_labels = torch.zeros(
-                [interior_data.shape[0], 1],
-                device=self.config.device,
-                dtype=torch.float32,
-            )
-            interior_data = torch.hstack([interior_data, interior_labels])
+        ic_t_labels = torch.zeros(
+            [initial_input.shape[0], 1], device=self.config.device, dtype=torch.float32
+        )
+        ic_t_data = hstack([initial_input, ic_t_labels])
 
         # Rom Data
 
-        X = self.data.get_input()
-        u = self.data.get_data_rom(self.wave_speed)
+        # X = self.data.get_input()
+        X, u = self.data.get_data_rom(self.wave_speed, self.config.subsample_rom)
 
         # decrease dataset size
         rand_rows = torch.randperm(X.shape[0])[:n_rom]
         X = X[rand_rows, :]
         u = u[rand_rows]
 
-        if self.noise > 0.0:
-            noise_scale = (u.max() - u.min()) * self.noise
-            noise_tensor = torch.rand_like(u) * noise_scale
-            u += noise_tensor
+        rom_data = hstack([X, u]).to(device=self.config.device)
 
-        rom_data = torch.hstack([X, u]).to(device=self.config.device)
-
-        dataset_dict = {"boundary": boundary_data, "rom": rom_data}
-        if not self.nointerior:
-            dataset_dict["interior"] = interior_data
+        dataset_dict = {
+            "interior": interior_data,
+            "boundary": boundary_data,
+            "rom": rom_data,
+            "ic_t": ic_t_data,
+        }
         complete_dataset = NamedTensorDataset(dataset_dict)
 
         self.set_dataset(complete_dataset)
 
     def setup_validation_data(self) -> None:
-        X = self.data.get_input()
-        val_X = X.detach().clone()
-        val_u = self.data.get_data_fom(self.wave_speed)
-        self.validation_data = torch.hstack([val_X, val_u]).to(
-            device=self.config.device
-        )
+        val_X, val_u = self.data.get_explicit_solution_data(self.wave_speed, True)
+        self.validation_data = hstack([val_X, val_u]).to(device=self.config.device)
 
     def plot_validation(self):
         validation_in = self.validation_data[:, : self.network.d_in]
         validation_labels = self.validation_data[:, -self.network.d_out :]
 
-        domain_shape = (-1, self.data.fom.num_intervals + 1)
+        domain_shape = (-1, (self.data.fom.num_intervals + 1) // 6)
         # TODO simplify by flattening
         domain_extent = self.geometry.limits.flatten()
         sns.color_palette("mako", as_cmap=True)
@@ -237,9 +259,7 @@ class WaveEquationBaseModel(BaseModel):
         nrom = self.get_labels("rom").shape[0]
         ninterior = self.get_labels("interior").shape[0]
 
-        fig.suptitle(
-            f"ROM-PINN Model with artificial noise: {self.noise} nrom: {nrom} nint: {ninterior}"
-        )
+        fig.suptitle(f"ROM-PINN nrom: {nrom} nint: {ninterior}")
         axs[0].set_title("Prediction")
         axs[1].set_title("Absolute Error")
         axs[1].set_xlabel("$t$")
@@ -248,12 +268,35 @@ class WaveEquationBaseModel(BaseModel):
         return fig
 
     def plot_dataset(self, name: str) -> None:
-        fig, axs = plt.subplots(1, 1, figsize=[12, 6])
-        for name in self.get_data_names():
-            data_in = self.get_input(name).cpu().numpy()
-            axs.scatter(data_in[:, 0], data_in[:, 1], label=name, alpha=0.5)
+        # sns.set_theme(style="whitegrid")
+        plt.rcParams.update(
+            {
+                "text.usetex": True,
+                "font.family": "serif",
+                "font.serif": ["Times New Roman"],
+                "font.size": 22,
+                "axes.labelsize": 28,
+                "axes.titlesize": 22,
+                "legend.fontsize": 28,
+                "xtick.labelsize": 28,
+                "ytick.labelsize": 28,
+                "lines.linewidth": 3,
+            }
+        )
+        cm = 1 / 2.54  # centimeters in inches
+        width_cm = 15
+        height_cm = width_cm * 0.6
+        fig, axs = plt.subplots(1, 1, figsize=[width_cm, height_cm])
+        for data_name in self.get_data_names():
+            if data_name == "ic_t":
+                continue
+            data_in = self.get_input(data_name).cpu().numpy()
+            axs.scatter(data_in[:, 0], data_in[:, 1], label=data_name, alpha=0.5)
 
-        axs.legend()
+        axs.legend(loc="upper right")
+        axs.set_xlabel(r"$t$")
+        axs.set_ylabel(r"$\xi$")
+        plt.tight_layout()
         plt.savefig(f"plots/dataset_{name}.png")
 
     def plot_boundary_data(self, name: str) -> None:
@@ -262,7 +305,72 @@ class WaveEquationBaseModel(BaseModel):
         data_in = self.get_input("boundary").cpu().numpy()
         labels = self.get_labels("boundary").cpu().numpy()
 
-        axs.scatter(data_in[:, 0], data_in[:, 1], c=labels, label="boundary", alpha=0.5)
+        # axs.scatter(data_in[:, 0], data_in[:, 1], c=labels, label="boundary", alpha=0.5)
 
         axs.legend()
         plt.savefig(f"plots/boundary_{name}.png")
+
+
+class WaveEquationExplicitDataModel(WaveEquationBaseModel):
+    def setup_data(self, n_boundary: int, n_interior: int, n_explicit: int):
+        # spread n_boudary evenly over all boundaries (including initial condition)
+        n_boundary = n_boundary // (len(self.boundary_conditions) + 1)
+        bc_tensors = []
+        logging.info("Generating BC data...")
+        for bc in self.boundary_conditions:
+            bc_data = bc.get_samples(n_boundary, device=self.config.device)
+            bc_tensors.append(bc_data)
+        boundary_data = torch.cat(bc_tensors)
+
+        logging.info("Generating interior data...")
+        interior_data = self.geometry.get_random_samples(
+            n_interior, device=self.config.device
+        )
+        interior_labels = torch.zeros(
+            [interior_data.shape[0], 1],
+            device=self.config.device,
+            dtype=torch.float32,
+        )
+        interior_data = hstack([interior_data, interior_labels])
+
+        initial_input = self.data.get_input().to(device=self.config.device)[
+            0 : self.data.fom.num_intervals + 1, :
+        ]
+        # downsample, TODO: this should be done in a more unified way, i guess
+        len_data = len(initial_input)
+        if n_boundary < len_data:
+            sampling_points = np.linspace(0, len_data - 1, n_boundary, dtype=int)
+            initial_input = initial_input[sampling_points]
+        elif n_boundary == len_data:
+            pass
+        else:
+            raise ValueError(
+                "Cannot generate n_sample={} from data of len: {}".format(
+                    n_boundary, len_data
+                )
+            )
+        ic_t_labels = torch.zeros(
+            [initial_input.shape[0], 1], device=self.config.device, dtype=torch.float32
+        )
+        ic_t_data = hstack([initial_input, ic_t_labels])
+
+        # Expliction solution data
+        # X, u = self.data.get_explicit_solution_data(self.wave_speed, True)
+        X, u = self.data.get_explicit_solution_data(self.wave_speed, False)
+
+        # decrease dataset size
+        rand_rows = torch.randperm(X.shape[0])[:n_explicit]
+        X = X[rand_rows, :]
+        u = u[rand_rows]
+
+        rom_data = hstack([X, u]).to(device=self.config.device)
+
+        dataset_dict = {
+            "interior": interior_data,
+            "boundary": boundary_data,
+            "rom": rom_data,
+            "ic_t": ic_t_data,
+        }
+        complete_dataset = NamedTensorDataset(dataset_dict)
+
+        self.set_dataset(complete_dataset)

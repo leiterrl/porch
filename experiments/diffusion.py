@@ -1,8 +1,13 @@
+from __future__ import annotations
+
 from matplotlib.figure import Figure
+from torch.types import Number
 from porch.boundary_conditions import BoundaryCondition, DirichletBC
 from porch.training import Trainer
 from porch.dataset import NamedTensorDataset
 import logging
+
+from collections.abc import Sequence
 
 
 import torch
@@ -15,6 +20,12 @@ from porch.util import gradient
 import matplotlib.pyplot as plt
 import numpy as np
 
+try:
+    from torch import hstack, vstack
+except ImportError:
+    from porch.util import hstack, vstack
+
+
 F = 0.5
 E = 0.5
 k = 2
@@ -23,7 +34,7 @@ D = 0.05
 
 # Analytical Solution of the Diffusion PDE --> d^2/dx^2 (P) = 1/D * d/dt (P)
 def P(x, t):
-    return (F * torch.cos(k * x) + E * torch.sin(k * x)) * torch.exp(-(k ** 2) * D * t)
+    return (F * torch.cos(k * x) + E * torch.sin(k * x)) * torch.exp(-(k**2) * D * t)
 
 
 class DiffusionModel(BaseModel):
@@ -32,38 +43,35 @@ class DiffusionModel(BaseModel):
         network: FullyConnected,
         geometry: Geometry,
         config: PorchConfig,
-        boundary_conditions: "list[BoundaryCondition]",
+        boundary_conditions: "Sequence[BoundaryCondition]",
     ) -> None:
         super().__init__(network, geometry, config, boundary_conditions)
 
     def boundary_loss(self, loss_name) -> torch.Tensor:
         """u(x=lb,t) = u(x=ub,t) = 0"""
         data_in = self.get_input(loss_name)
+        if len(data_in) == 0:
+            return torch.zeros([1] + list(data_in.shape)[1:], device=self.config.device)
         labels = self.get_labels(loss_name)
         prediction = self.network.forward(data_in)
 
         return torch.pow(prediction - labels, 2)
 
-    # TODO: complete ic (u and u_t)
-    def ic_loss(self, loss_name) -> torch.Tensor:
-        """u_t(x,t=0) = 0"""
-        data_in = self.get_input(loss_name)
-        labels = self.get_labels(loss_name)
-        prediction = self.network.forward(data_in)
-
-        return torch.pow(prediction - labels, 2)
-
-    def interior_loss(self, loss_name) -> torch.Tensor:
+    def interior_loss(self, loss_name: str) -> torch.Tensor:
 
         data_in = self.get_input(loss_name)
+        if len(data_in) == 0:
+            return torch.zeros([1] + list(data_in.shape)[1:], device=self.config.device)
         labels = self.get_labels(loss_name)
         prediction = self.network.forward(data_in)
 
         grad_u = gradient(prediction, data_in)
+
         u_x = grad_u[..., 0]
         u_t = grad_u[..., 1]
 
         grad_u_x = gradient(u_x, data_in)
+
         u_xx = grad_u_x[..., 0]
 
         D = 0.05
@@ -77,6 +85,8 @@ class DiffusionModel(BaseModel):
         self.losses = {"boundary": self.boundary_loss, "interior": self.interior_loss}
 
     def setup_data(self, n_boundary: int, n_interior: int) -> None:
+        # spread n_boudary evenly over all boundaries (including initial condition)
+        n_boundary = n_boundary // (len(self.boundary_conditions) + 1)
         bc_tensors = []
         logging.info("Generating BC data...")
         for bc in self.boundary_conditions:
@@ -91,7 +101,7 @@ class DiffusionModel(BaseModel):
         interior_labels = torch.zeros(
             [interior_data.shape[0], 1], device=self.config.device, dtype=torch.float32
         )
-        interior_data = torch.hstack([interior_data, interior_labels])
+        interior_data = hstack([interior_data, interior_labels])
 
         complete_dataset = NamedTensorDataset(
             {"boundary": boundary_data, "interior": interior_data}
@@ -102,20 +112,22 @@ class DiffusionModel(BaseModel):
     def setup_validation_data(self, n_validation: int) -> None:
 
         x_linspace = torch.linspace(
-            self.geometry.limits[0, 0], self.geometry.limits[0, 1], n_validation
+            float(self.geometry.limits[0, 0]),
+            float(self.geometry.limits[0, 1]),
+            n_validation,
         )
         t_linspace = torch.linspace(
-            self.geometry.limits[1, 0], self.geometry.limits[1, 1], n_validation
+            float(self.geometry.limits[1, 0]),
+            float(self.geometry.limits[1, 1]),
+            n_validation,
         )
-        xx, tt = torch.meshgrid(x_linspace, t_linspace)
+        xx, tt = torch.meshgrid(x_linspace, t_linspace, indexing="ij")
         z = P(xx, tt)
 
-        val_X = torch.hstack([xx.flatten().unsqueeze(-1), tt.flatten().unsqueeze(-1)])
+        val_X = hstack([xx.flatten().unsqueeze(-1), tt.flatten().unsqueeze(-1)])
         val_u = torch.as_tensor(z.flatten().unsqueeze(-1), dtype=torch.float32)
 
-        self.validation_data = torch.hstack([val_X, val_u]).to(
-            device=self.config.device
-        )
+        self.validation_data = hstack([val_X, val_u]).to(device=self.config.device)
 
     def plot_dataset(self) -> None:
         fig, axs = plt.subplots(1, 1, figsize=[12, 6])
@@ -126,11 +138,12 @@ class DiffusionModel(BaseModel):
         axs.legend()
         plt.savefig("plots/dataset_diffusion.png")
 
-    def plot_validation(self) -> Figure:
+    def plot_validation(self, writer, iteration) -> Figure:
         validation_in = self.validation_data[:, : self.network.d_in]
         validation_labels = self.validation_data[:, -self.network.d_out :]
 
         domain_shape = (200, 200)
+        axs: list[plt.Axes]
         fig, axs = plt.subplots(2, 1, figsize=[12, 6], sharex=True)
         self.network.eval()
         prediction = self.network.forward(validation_in)
@@ -144,19 +157,16 @@ class DiffusionModel(BaseModel):
         im1 = axs[0].imshow(
             im_data,
             interpolation="nearest",
-            extent=[0.0, 2.0 * np.pi, 0.0, 10.0],
+            extent=[0.0, 10.0, 0.0, 2.0 * np.pi],
             origin="lower",
             aspect="auto",
         )
-        # axs[1].imshow(im_data_gt.detach().cpu().numpy())
         im2 = axs[1].imshow(
-            np.abs(im_data_gt - im_data),
+            im_data_gt,
             interpolation="nearest",
-            extent=[0.0, 2.0 * np.pi, 0.0, 10.0],
+            extent=[0.0, 10.0, 0.0, 2.0 * np.pi],
             origin="lower",
             aspect="auto",
-            # vmin=0.0,
-            # vmax=1.0,
         )
         fig.colorbar(im1, extend="both", shrink=0.9, ax=axs[0])
         fig.colorbar(im2, extend="both", shrink=0.9, ax=axs[1])
@@ -167,8 +177,9 @@ class DiffusionModel(BaseModel):
         return fig
 
 
-def main(n_epochs=10000) -> float:
-    model_dir = "/import/sgs.local/scratch/leiterrl/1d_diffusion"
+def main(
+    n_epochs=20000, model_dir="/import/sgs.local/scratch/leiterrl/1d_diffusion"
+) -> Number:
     num_layers = 4
     num_neurons = 20
     weight_norm = False
@@ -181,7 +192,7 @@ def main(n_epochs=10000) -> float:
     else:
         device = torch.device("cpu")
 
-    config = PorchConfig(device=device, lr=0.001, epochs=n_epochs)
+    config = PorchConfig(device=device, lr=0.001, epochs=n_epochs, lra=True)
 
     xlims = (0.0, 2.0 * np.pi)
     tlims = (0.0, 10.0)
@@ -195,19 +206,38 @@ def main(n_epochs=10000) -> float:
     def ic_func(t_in):
         x_in_space = t_in[:, 0]
         t_in_space = t_in[:, 1]
-        z_in = torch.atleast_2d(P(x_in_space, t_in_space)).T
+        z_in = torch.unsqueeze(P(x_in_space, t_in_space), 1)
         return z_in
 
     ic_axis_definition = torch.Tensor([False, True])
     ic = DirichletBC("initial_bc", geom, ic_axis_definition, tlims[0], ic_func)
 
-    boundary_conditions = [ic]
+    bc_axis_definition = torch.Tensor([True, False])
+
+    bc_bottom = DirichletBC(
+        "bc_bottom",
+        geom,
+        bc_axis_definition,
+        xlims[0],
+        ic_func,
+    )
+    bc_top = DirichletBC(
+        "bc_top",
+        geom,
+        bc_axis_definition,
+        xlims[1],
+        ic_func,
+    )
+
+    boundary_conditions = [ic, bc_bottom, bc_top]
 
     model = DiffusionModel(network, geom, config, boundary_conditions)
 
     model.setup_data(n_boundary, n_interior)
     model.setup_validation_data(n_validation)
     model.plot_dataset()
+
+    config.lr = 0.0004
 
     trainer = Trainer(model, config, model_dir)
 
