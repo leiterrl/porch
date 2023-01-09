@@ -1,17 +1,16 @@
-# from torch.types import Number
-from porch.network import FullyConnected
-import torch
-from .config import PorchConfig
-from .model import BaseModel
-import logging
-from tqdm import tqdm
 import dataclasses
-import json
-
-# from tensorboardX import SummaryWriter
-from .util import CorrectedSummaryWriter as SummaryWriter
 import datetime
+import json
+import logging
 import os
+
+import torch
+from tqdm import tqdm
+
+from porch.config import PorchConfig
+from porch.model import BaseModel
+from porch.network import FullyConnected
+from porch.tensorboard_util import CorrectedSummaryWriter as SummaryWriter
 
 # logger = logging.getLogger(__name__)
 

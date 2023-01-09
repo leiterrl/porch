@@ -124,17 +124,42 @@ class DiscreteBC(BoundaryCondition):
         self.data = data
 
     def get_samples(self, n_samples: int, device=None) -> Tensor:
-        # TODO: fix sampling discrete bc
+        """Get samples from discrete boundary condition. Subsamples if number of samples smaller than provided data.
+
+        Args:
+            n_samples: number of samples to retrieve
+            device: target device to place data on
+        """
         len_data = len(self.data)
-        # if n_samples < len_data:
-        #     sampling_points = np.linspace(0, len_data - 1, n_samples, dtype=int)
-        #     data = self.data[sampling_points, :]
-        # elif n_samples == len_data:
+        if n_samples < len_data:
+            sampling_points = np.linspace(0, len_data - 1, n_samples, dtype=int)
+            data = self.data[sampling_points, :]
+        elif n_samples == len_data:
+            data = self.data
+        else:
+            raise ValueError(
+                "Cannot generate n_sample={} from data of len: {}".format(
+                    n_samples, len_data
+                )
+            )
+        return data.to(device=device)
+
+
+class DiscreteNeumannBC(BoundaryCondition):
+    def __init__(self, name: str, geom: Geometry, data: Tensor) -> None:
+        """Construct a Discrite Boundary Condition object
+
+        Args:
+            name: gives the boundary condition a unique name
+            geom: geometry object used for sampling
+            data: Tensor which contains discrete input, output and normal values
+        """
+        super().__init__(name, geom)
+        if data.shape[1] <= geom.d:
+            raise RuntimeError("Dataset must have at least one output dimension.")
+        self.data = data
+
+    def get_samples(self, n_samples: int, device=None) -> Tensor:
+        len_data = len(self.data)
         data = self.data
-        # else:
-        #     raise ValueError(
-        #         "Cannot generate n_sample={} from data of len: {}".format(
-        #             n_samples, len_data
-        #         )
-        #     )
         return data.to(device=device)
