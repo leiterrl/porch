@@ -28,13 +28,36 @@ except ImportError:
 
 F = 0.5
 E = 0.5
-k = 2
-D = 0.05
+k = 0.5
+D = 0.4
+D_inv = 1.0 / D
+L = 2.0 * torch.pi
+n = 2.0
+T = 10.0
 
 
 # Analytical Solution of the Diffusion PDE --> d^2/dx^2 (P) = 1/D * d/dt (P)
+# def P(x, t):
+#     return (F * torch.cos(k * x) + E * torch.sin(k * x)) * torch.exp(-(k**2) * D * t)
+
+
+# def P(x, t):
+#     return (F * torch.sin(k * x)) * torch.exp(-(k**2) * D * t)
+
+
+# def P(t, x):
+#     return torch.sin(2 * k**2 * F * t - x * k) * torch.exp(-k * x)
+
+
+# def P(x, t):
+#     return torch.sin(2 * k * x) * torch.exp(-(k**2) * D * t)
+
+
+# deepxde version
 def P(x, t):
-    return (F * torch.cos(k * x) + E * torch.sin(k * x)) * torch.exp(-(k**2) * D * t)
+    return torch.exp(-(n**2 * torch.pi**2 * D * t) / (L**2)) * torch.sin(
+        n * torch.pi * x / L
+    )
 
 
 class DiffusionModel(BaseModel):
@@ -58,7 +81,6 @@ class DiffusionModel(BaseModel):
         return torch.pow(prediction - labels, 2)
 
     def interior_loss(self, loss_name: str) -> torch.Tensor:
-
         data_in = self.get_input(loss_name)
         if len(data_in) == 0:
             return torch.zeros([1] + list(data_in.shape)[1:], device=self.config.device)
@@ -74,10 +96,7 @@ class DiffusionModel(BaseModel):
 
         u_xx = grad_u_x[..., 0]
 
-        D = 0.05
-        D_inv = 1.0 / D
-
-        f = u_xx - u_t * D_inv
+        f = u_t - D * u_xx
 
         return torch.pow(f - labels, 2)
 
@@ -110,7 +129,6 @@ class DiffusionModel(BaseModel):
         self.set_dataset(complete_dataset)
 
     def setup_validation_data(self, n_validation: int) -> None:
-
         x_linspace = torch.linspace(
             float(self.geometry.limits[0, 0]),
             float(self.geometry.limits[0, 1]),
@@ -133,8 +151,10 @@ class DiffusionModel(BaseModel):
         fig, axs = plt.subplots(1, 1, figsize=[12, 6])
         for name in self.get_data_names():
             data_in = self.get_input(name).cpu().numpy()
-            axs.scatter(data_in[:, 0], data_in[:, 1], label=name, alpha=0.5)
+            axs.scatter(data_in[:, 1], data_in[:, 0], label=name, alpha=0.5)
 
+        axs.set_xlabel("t")
+        axs.set_ylabel("x")
         axs.legend()
         plt.savefig("plots/dataset_diffusion.png")
 
@@ -178,13 +198,13 @@ class DiffusionModel(BaseModel):
 
 
 def main(
-    n_epochs=20000, model_dir="/import/sgs.local/scratch/leiterrl/1d_diffusion"
+    n_epochs=5000, model_dir="/import/sgs.local/scratch/leiterrl/1d_diffusion"
 ) -> Number:
     num_layers = 4
     num_neurons = 20
     weight_norm = False
     n_boundary = 200
-    n_interior = 200
+    n_interior = 3000
     n_validation = 200
 
     if torch.cuda.is_available():
@@ -194,8 +214,8 @@ def main(
 
     config = PorchConfig(device=device, lr=0.001, epochs=n_epochs, lra=True)
 
-    xlims = (0.0, 2.0 * np.pi)
-    tlims = (0.0, 10.0)
+    xlims = (0.0, L)
+    tlims = (0.0, T)
 
     # 2D in (x,t) -> u 1D out
     network = FullyConnected(2, 1, num_layers, num_neurons, weight_norm)
@@ -219,17 +239,35 @@ def main(
         geom,
         bc_axis_definition,
         xlims[0],
-        ic_func,
+        BoundaryCondition.zero_bc_fn,
+        False,
     )
     bc_top = DirichletBC(
         "bc_top",
         geom,
         bc_axis_definition,
         xlims[1],
-        ic_func,
+        BoundaryCondition.zero_bc_fn,
+        False,
     )
 
+    # bc_bottom = DirichletBC(
+    #     "bc_bottom",
+    #     geom,
+    #     bc_axis_definition,
+    #     xlims[0],
+    #     ic_func,
+    # )
+    # bc_top = DirichletBC(
+    #     "bc_top",
+    #     geom,
+    #     bc_axis_definition,
+    #     xlims[1],
+    #     ic_func,
+    # )
+
     boundary_conditions = [ic, bc_bottom, bc_top]
+    # boundary_conditions = [ic]
 
     model = DiffusionModel(network, geom, config, boundary_conditions)
 
@@ -237,11 +275,16 @@ def main(
     model.setup_validation_data(n_validation)
     model.plot_dataset()
 
-    config.lr = 0.0004
+    config.lr = 0.001
 
     trainer = Trainer(model, config, model_dir)
 
-    return trainer.train()
+    val_err = trainer.train()
+
+    fig = model.plot_validation(None, None)
+    fig.savefig("plots/diss/validation_diffusion.pdf")
+
+    return val_err
 
 
 if __name__ == "__main__":
