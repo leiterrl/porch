@@ -33,12 +33,14 @@ D = 0.4
 D_inv = 1.0 / D
 L = 2.0 * torch.pi
 n = 2.0
-T = 10.0
+T = 5.0
+
+# reference http://personal.ph.surrey.ac.uk/~phs1rs/teaching/l3_pdes.pdf
 
 
 # Analytical Solution of the Diffusion PDE --> d^2/dx^2 (P) = 1/D * d/dt (P)
-# def P(x, t):
-#     return (F * torch.cos(k * x) + E * torch.sin(k * x)) * torch.exp(-(k**2) * D * t)
+def P(x, t):
+    return (F * torch.cos(k * x) + E * torch.sin(k * x)) * torch.exp(-(k**2) * D * t)
 
 
 # def P(x, t):
@@ -96,7 +98,7 @@ class DiffusionModel(BaseModel):
 
         u_xx = grad_u_x[..., 0]
 
-        f = u_t - D * u_xx
+        f = D * u_xx - u_t
 
         return torch.pow(f - labels, 2)
 
@@ -198,7 +200,7 @@ class DiffusionModel(BaseModel):
 
 
 def main(
-    n_epochs=5000, model_dir="/import/sgs.local/scratch/leiterrl/1d_diffusion"
+    n_epochs=20000, model_dir="/import/sgs.local/scratch/leiterrl/1d_diffusion"
 ) -> Number:
     num_layers = 4
     num_neurons = 20
@@ -266,8 +268,8 @@ def main(
     #     ic_func,
     # )
 
-    boundary_conditions = [ic, bc_bottom, bc_top]
-    # boundary_conditions = [ic]
+    # boundary_conditions = [ic, bc_bottom, bc_top]
+    boundary_conditions = [ic]
 
     model = DiffusionModel(network, geom, config, boundary_conditions)
 
@@ -275,7 +277,7 @@ def main(
     model.setup_validation_data(n_validation)
     model.plot_dataset()
 
-    config.lr = 0.001
+    config.lr = 0.0004
 
     trainer = Trainer(model, config, model_dir)
 
