@@ -34,7 +34,7 @@ D = 0.05
 
 # Analytical Solution of the Diffusion PDE --> d^2/dx^2 (P) = 1/D * d/dt (P)
 def P(x, t):
-    return (F * torch.cos(k * x) + E * torch.sin(k * x)) * torch.exp(-(k ** 2) * D * t)
+    return (F * torch.cos(k * x) + E * torch.sin(k * x)) * torch.exp(-(k**2) * D * t)
 
 
 def circle_bc(data_in):
@@ -150,7 +150,6 @@ class DiffusionModel(BaseModel):
 
     # @torch.jit.script
     def interior_loss(self, loss_name: str) -> torch.Tensor:
-
         data_in = self.get_input(loss_name)
         if len(data_in) == 0:
             return torch.zeros([1] + list(data_in.shape)[1:], device=self.config.device)
@@ -201,7 +200,6 @@ class DiffusionModel(BaseModel):
         self.set_dataset(complete_dataset)
 
     def setup_validation_data(self, n_validation: int) -> None:
-
         x_linspace = torch.linspace(
             float(self.geometry.limits[0, 0]),
             float(self.geometry.limits[0, 1]),
@@ -212,7 +210,7 @@ class DiffusionModel(BaseModel):
             float(self.geometry.limits[1, 1]),
             n_validation,
         )
-        xx, tt = torch.meshgrid(x_linspace, t_linspace)
+        xx, tt = torch.meshgrid(x_linspace, t_linspace, indexing="ij")
         z = P(xx, tt)
 
         val_X = hstack([xx.flatten().unsqueeze(-1), tt.flatten().unsqueeze(-1)])

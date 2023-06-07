@@ -59,7 +59,6 @@ class HeatModel(BaseModel):
         return torch.pow(prediction - labels, 2)
 
     def interior_loss(self, loss_name: str) -> torch.Tensor:
-
         data_in = self.get_input(loss_name)
         if len(data_in) == 0:
             return torch.zeros([1] + list(data_in.shape)[1:], device=self.config.device)
@@ -165,7 +164,6 @@ class HeatModel(BaseModel):
         self.set_dataset(complete_dataset)
 
     def setup_validation_data(self, n_validation: int) -> None:
-
         x_linspace = torch.linspace(
             float(self.geometry.limits[0, 0]),
             float(self.geometry.limits[0, 1]),
@@ -176,7 +174,7 @@ class HeatModel(BaseModel):
             float(self.geometry.limits[1, 1]),
             n_validation,
         )
-        xx, yy = torch.meshgrid(x_linspace, y_linspace)
+        xx, yy = torch.meshgrid(x_linspace, y_linspace, indexing="ij")
         z = self.exact_solution(xx, yy)
 
         val_X = hstack([xx.flatten().unsqueeze(-1), yy.flatten().unsqueeze(-1)])
