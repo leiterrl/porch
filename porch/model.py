@@ -140,6 +140,18 @@ class BaseModel:
             # first step, to initialze current_dataset
             self.dataset.step()
 
+    def get_loss_data(self, loss_name: str) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return input and labels for a given loss name"""
+        data_in = self.get_input(loss_name)
+        data_out = self.get_labels(loss_name)
+        return data_in, data_out
+
+    def loss_default(self, loss_name: str) -> torch.Tensor:
+        """Default loss function"""
+        data_in, labels = self.get_loss_data(loss_name)
+        prediction = self.network.forward(data_in)
+        return torch.pow(prediction - labels, 2)
+
     # TODO: alternatively, a callback to step the dataset might be added to a list of callbacks executed during training
     def training_step(self) -> None:
         if hasattr(self.dataset, "step"):

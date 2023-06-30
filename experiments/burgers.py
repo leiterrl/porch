@@ -17,8 +17,7 @@ diff_coeff = 0.01 / np.pi
 
 class BurgersModel(BaseModel):
     def loss_interior(self, loss_name):
-        data_in = self.get_input(loss_name)
-        data_out = self.get_labels(loss_name)
+        data_in, data_out = self.get_loss_data(loss_name)
 
         u = self.network.forward(data_in)
 
@@ -33,22 +32,13 @@ class BurgersModel(BaseModel):
 
         return torch.pow(f - data_out, 2)
 
-    def loss_boundary(self, loss_name):
-        data_in = self.get_input(loss_name)
-        data_out = self.get_labels(loss_name)
-
-        u = self.network.forward(data_in)
-
-        return torch.pow(u - data_out, 2)
-
     def setup_losses(self):
         self.losses = {
             "interior": self.loss_interior,
-            "boundary": self.loss_boundary,
+            "boundary": self.loss_default,
         }
 
     def setup_data(self):
-
         bc_tensors = []
         for bc in self.boundary_conditions:
             bc_data = bc.get_samples(self.config.n_boundary, device=self.config.device)
@@ -65,9 +55,9 @@ class BurgersModel(BaseModel):
         )
         interior_data = torch.hstack([interior_data, interior_labels])
 
-        dataset_dict = {"interior": interior_data, "boundary": boundary_data}
-
-        dataset = NamedTensorDataset(dataset_dict)
+        dataset = NamedTensorDataset(
+            {"interior": interior_data, "boundary": boundary_data}
+        )
         self.set_dataset(dataset)
 
     def setup_validation_data(self, n_validation: int) -> None:
@@ -81,7 +71,7 @@ class BurgersModel(BaseModel):
             np_data, dtype=torch.float32, device=self.config.device
         )
 
-    def plot_validation(self):
+    def plot_validation(self, writer, iteration):
         validation_in = self.validation_data[:, : self.network.d_in]
         validation_labels = self.validation_data[:, -self.network.d_out :]
 
@@ -182,7 +172,6 @@ def initial_condition_fn(data_in):
 
 
 def main():
-
     config = PorchConfig()
 
     config.model_dir = "/data/scratch/leiterrl/burgers_new"
