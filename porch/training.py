@@ -62,7 +62,6 @@ class Trainer:
         return torch.cat(grads).clone()
 
     def train_epoch(self):
-
         if self.config.lra and self.iteration % 10 == 0 and self.iteration > 1:
             self.optimizer.zero_grad()
             losses = self.model.compute_losses_unweighted()
@@ -114,7 +113,7 @@ class Trainer:
 
             self.model.loss_weights["interior"] = 1.0
 
-        losses_mean = {}
+        losses_mean = dict()
         if self.config.optimizer_type == "lbfgs":
 
             def closure() -> float:
@@ -128,8 +127,10 @@ class Trainer:
                 for name, loss in losses.items():
                     # TODO: unify norm calculation
                     loss_mean = loss.mean()
+                    losses_mean[name] = loss_mean
                     self.writer.add_scalar("training/" + name, loss_mean, self.epoch)
                     closure_loss += loss_mean
+                losses_mean["total"] = closure_loss
                 self.writer.add_scalar(
                     "training/total_loss", closure_loss.item(), self.epoch
                 )
@@ -142,7 +143,6 @@ class Trainer:
             self.optimizer.step(closure)
 
         else:
-            losses_mean = dict()
             losses = self.model.compute_losses()
             total_loss = torch.tensor(
                 [0.0], dtype=torch.float32, device=self.config.device
