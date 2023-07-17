@@ -199,9 +199,7 @@ class DiffusionModel(BaseModel):
         return fig
 
 
-def main(
-    n_epochs=20000, model_dir="/import/sgs.local/scratch/leiterrl/1d_diffusion"
-) -> Number:
+def main(n_epochs=20000, model_dir=".") -> Number:
     num_layers = 4
     num_neurons = 20
     weight_norm = False
@@ -284,7 +282,8 @@ def main(
     val_err = trainer.train()
 
     fig = model.plot_validation(None, None)
-    fig.savefig("plots/diss/validation_diffusion.pdf")
+    fig.savefig("plots/validation_diffusion.pdf")
+
 
     return val_err
 
