@@ -13,10 +13,10 @@ Porch is a Python library that enables users to train Physics-Informed Neural Ne
 
 Porch requires PyTorch to be installed as well. Please refer to the official [PyTorch website](https://pytorch.org/get-started/locally/) for installation instructions specific to your platform. This avoids pip installing the CPU-only version of PyTorch on a system with a GPU.
 
-To install Porch, you can use pip, Python's package installer:
+To install Porch, you can use pip locally:
 
 ```shell
-pip install porch
+pip install .
 ```
 
 ## Usage
