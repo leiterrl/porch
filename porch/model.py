@@ -133,13 +133,6 @@ class BaseModel:
         else:
             return 1
 
-    def init_training_step(self) -> None:
-        if isinstance(self.dataset, BatchedNamedTensorDataset):
-            # reset iterators
-            self.dataset.reset_iters()
-            # first step, to initialze current_dataset
-            self.dataset.step()
-
     def get_loss_data(self, loss_name: str) -> tuple[torch.Tensor, torch.Tensor]:
         """Return input and labels for a given loss name"""
         data_in = self.get_input(loss_name)

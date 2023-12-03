@@ -27,6 +27,7 @@ class Trainer:
 
         if config.optimizer_type == "adam":
             self.optimizer = torch.optim.Adam(model.network.parameters(), lr=config.lr)
+            # self.optimizer.param_groups.append({"params": model.diffusion_coefficient})
         elif config.optimizer_type == "lbfgs":
             # self.optimizer = torch.optim.LBFGS(model.network.parameters())
             self.optimizer = torch.optim.LBFGS(
@@ -63,6 +64,7 @@ class Trainer:
 
     def train_epoch(self):
         if self.config.lra and self.iteration % 10 == 0 and self.iteration > 1:
+            raise NotImplementedError
             self.optimizer.zero_grad()
             losses = self.model.compute_losses_unweighted()
             loss_grads = {}
@@ -86,6 +88,7 @@ class Trainer:
                 ) * self.model.loss_weights[name] + self.config.lra_alpha * update
 
         elif self.config.dirichlet and self.iteration % 10 == 0 and self.iteration > 1:
+            raise NotImplementedError
             self.optimizer.zero_grad()
             losses = self.model.compute_losses_unweighted()
             loss_grads = {}
@@ -115,6 +118,7 @@ class Trainer:
 
         losses_mean = dict()
         if self.config.optimizer_type == "lbfgs":
+            raise NotImplementedError
 
             def closure() -> float:
                 self.optimizer.zero_grad()
@@ -175,6 +179,7 @@ class Trainer:
                 self.writer.flush()
 
         if self.scheduler:
+            raise NotImplementedError
             self.scheduler.step()
 
         return losses_mean
@@ -206,37 +211,24 @@ class Trainer:
         for epoch in range(self.config.epochs + 1):
             self.epoch = epoch
 
-            num_batches = self.model.get_number_of_batches()
+            # num_batches = self.model.get_number_of_batches()
             # initialize training set, e.g. initialize batched data loaders
-            self.model.init_training_step()
-            # cycle batches
-            mean_over_batches_losses = dict()
-            for _ in range(num_batches):
-                loss_means = self.train_epoch()
+            loss_means = self.train_epoch()
 
-                for name, loss_mean in loss_means.items():
-                    try:
-                        mean_over_batches_losses[name] += loss_mean
-                    except KeyError:
-                        mean_over_batches_losses[name] = loss_mean
-
-                if self.iteration % self.config.print_freq == 0:
-                    for name in self.model.losses.keys():
-                        # TODO: dividing by the num_batches will be bad, if it has many zero contributions due to inconsistent data sizes
-                        mob_loss = mean_over_batches_losses[name].item() / num_batches
-                        self.writer.add_scalar(
-                            "training/" + name, mob_loss, self.iteration
-                        )
-                    mob_total = mean_over_batches_losses["total"].item() / num_batches
+            if self.iteration % self.config.print_freq == 0:
+                for name in self.model.losses.keys():
                     self.writer.add_scalar(
-                        "training/total_loss",
-                        mob_total,
-                        self.iteration,
+                        "training/" + name, loss_means[name].item(), self.iteration
                     )
-                    self.postfix_dict["loss"] = format(mob_total, ".3e")
 
-                if self.iteration >= self.config.epochs:
-                    break
+                total_loss = loss_means["total"].item()
+                self.writer.add_scalar(
+                    "training/total_loss",
+                    total_loss,
+                    self.iteration,
+                )
+                self.postfix_dict["loss"] = format(total_loss, ".3e")
+
             if self.iteration >= self.config.epochs:
                 break
             # prof.step()
