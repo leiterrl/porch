@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import matplotlib
 from matplotlib.figure import Figure
 from torch.types import Number
 from porch.boundary_conditions import BoundaryCondition, DirichletBC
@@ -19,6 +20,8 @@ from porch.util import gradient
 
 import matplotlib.pyplot as plt
 import numpy as np
+from raphplot.app_plots import plot_training_results_field_with_error
+from raphplot.constants import FIG_SIZE_NORMAL, rc_config_font_size, SHARED_PATH
 
 try:
     from torch import hstack, vstack
@@ -29,9 +32,9 @@ except ImportError:
 F = 0.5
 E = 0.5
 k = 0.5
-D = 0.4
+D = 0.2
 D_inv = 1.0 / D
-L = 2.0 * torch.pi
+L = 6.0
 n = 2.0
 T = 5.0
 
@@ -39,8 +42,8 @@ T = 5.0
 
 
 # Analytical Solution of the Diffusion PDE --> d^2/dx^2 (P) = 1/D * d/dt (P)
-def P(x, t):
-    return (F * torch.cos(k * x) + E * torch.sin(k * x)) * torch.exp(-(k**2) * D * t)
+# def P(x, t):
+#     return (F * torch.cos(k * x) + E * torch.sin(k * x)) * torch.exp(-(k**2) * D * t)
 
 
 # def P(x, t):
@@ -51,15 +54,15 @@ def P(x, t):
 #     return torch.sin(2 * k**2 * F * t - x * k) * torch.exp(-k * x)
 
 
-# def P(x, t):
-#     return torch.sin(2 * k * x) * torch.exp(-(k**2) * D * t)
+def P(x, t):
+    return torch.sin(k * np.pi * x) * torch.exp(-((k * np.pi) ** 2) * D * t)
 
 
 # deepxde version
-def P(x, t):
-    return torch.exp(-(n**2 * torch.pi**2 * D * t) / (L**2)) * torch.sin(
-        n * torch.pi * x / L
-    )
+# def P(x, t):
+#     return torch.exp(-(n**2 * torch.pi**2 * D * t) / (L**2)) * torch.sin(
+#         n * torch.pi * x / L
+#     )
 
 
 class DiffusionModel(BaseModel):
@@ -103,7 +106,7 @@ class DiffusionModel(BaseModel):
         return torch.pow(f - labels, 2)
 
     def setup_losses(self) -> None:
-        self.losses = {"boundary": self.boundary_loss, "interior": self.interior_loss}
+        self.losses = {"Boundary": self.boundary_loss, "Interior": self.interior_loss}
 
     def setup_data(self, n_boundary: int, n_interior: int) -> None:
         # spread n_boudary evenly over all boundaries (including initial condition)
@@ -125,7 +128,7 @@ class DiffusionModel(BaseModel):
         interior_data = hstack([interior_data, interior_labels])
 
         complete_dataset = NamedTensorDataset(
-            {"boundary": boundary_data, "interior": interior_data}
+            {"Boundary": boundary_data, "Interior": interior_data}
         )
 
         self.set_dataset(complete_dataset)
@@ -150,7 +153,8 @@ class DiffusionModel(BaseModel):
         self.validation_data = hstack([val_X, val_u]).to(device=self.config.device)
 
     def plot_dataset(self) -> None:
-        fig, axs = plt.subplots(1, 1, figsize=[12, 6])
+        matplotlib.rcParams.update(rc_config_font_size())
+        fig, axs = plt.subplots(1, 1, figsize=FIG_SIZE_NORMAL)
         for name in self.get_data_names():
             data_in = self.get_input(name).cpu().numpy()
             axs.scatter(data_in[:, 1], data_in[:, 0], label=name, alpha=0.5)
@@ -158,15 +162,15 @@ class DiffusionModel(BaseModel):
         axs.set_xlabel("t")
         axs.set_ylabel("x")
         axs.legend()
-        plt.savefig("plots/dataset_diffusion.png")
+        plt.tight_layout()
+        plt.savefig(SHARED_PATH / "sciml/diffusion_dataset.pdf")
 
     def plot_validation(self, writer, iteration) -> Figure:
         validation_in = self.validation_data[:, : self.network.d_in]
         validation_labels = self.validation_data[:, -self.network.d_out :]
 
         domain_shape = (200, 200)
-        axs: list[plt.Axes]
-        fig, axs = plt.subplots(2, 1, figsize=[12, 6], sharex=True)
+
         self.network.eval()
         prediction = self.network.forward(validation_in)
         self.network.train()
@@ -176,26 +180,21 @@ class DiffusionModel(BaseModel):
         im_data = im_data.reshape(domain_shape)
         im_data_gt = im_data_gt.reshape(domain_shape)
 
-        im1 = axs[0].imshow(
-            im_data,
-            interpolation="nearest",
-            extent=[0.0, 10.0, 0.0, 2.0 * np.pi],
-            origin="lower",
-            aspect="auto",
-        )
-        im2 = axs[1].imshow(
-            im_data_gt,
-            interpolation="nearest",
-            extent=[0.0, 10.0, 0.0, 2.0 * np.pi],
-            origin="lower",
-            aspect="auto",
-        )
-        fig.colorbar(im1, extend="both", shrink=0.9, ax=axs[0])
-        fig.colorbar(im2, extend="both", shrink=0.9, ax=axs[1])
+        max_error = np.max(np.abs(im_data - im_data_gt))
 
-        axs[1].set_xlabel("$t$")
-        axs[0].set_ylabel("$x$")
-        axs[1].set_ylabel("$x$")
+        fig = plot_training_results_field_with_error(
+            im_data,
+            im_data_gt,
+            [0.0, T, 0.0, L],
+            vmin=-1.0,
+            vmax=1.0,
+            vmin2=-max_error,
+            vmax2=max_error,
+            title1="Prediction",
+            title2="Error",
+        )
+
+        plt.tight_layout()
         return fig
 
 
@@ -203,7 +202,7 @@ def main(n_epochs=20000, model_dir=".") -> Number:
     num_layers = 4
     num_neurons = 20
     weight_norm = False
-    n_boundary = 200
+    n_boundary = 1000
     n_interior = 3000
     n_validation = 200
 
@@ -212,7 +211,7 @@ def main(n_epochs=20000, model_dir=".") -> Number:
     else:
         device = torch.device("cpu")
 
-    config = PorchConfig(device=device, lr=0.001, epochs=n_epochs, lra=True)
+    config = PorchConfig(device=device, lr=0.0004, epochs=n_epochs)
 
     xlims = (0.0, L)
     tlims = (0.0, T)
@@ -230,7 +229,7 @@ def main(n_epochs=20000, model_dir=".") -> Number:
         return z_in
 
     ic_axis_definition = torch.Tensor([False, True])
-    ic = DirichletBC("initial_bc", geom, ic_axis_definition, tlims[0], ic_func)
+    ic = DirichletBC("initial_bc", geom, ic_axis_definition, tlims[0], ic_func, False)
 
     bc_axis_definition = torch.Tensor([True, False])
 
@@ -239,7 +238,7 @@ def main(n_epochs=20000, model_dir=".") -> Number:
         geom,
         bc_axis_definition,
         xlims[0],
-        BoundaryCondition.zero_bc_fn,
+        ic_func,
         False,
     )
     bc_top = DirichletBC(
@@ -247,7 +246,7 @@ def main(n_epochs=20000, model_dir=".") -> Number:
         geom,
         bc_axis_definition,
         xlims[1],
-        BoundaryCondition.zero_bc_fn,
+        ic_func,
         False,
     )
 
@@ -266,8 +265,8 @@ def main(n_epochs=20000, model_dir=".") -> Number:
     #     ic_func,
     # )
 
-    # boundary_conditions = [ic, bc_bottom, bc_top]
-    boundary_conditions = [ic]
+    boundary_conditions = [ic, bc_bottom, bc_top]
+    # boundary_conditions = [ic]
 
     model = DiffusionModel(network, geom, config, boundary_conditions)
 
@@ -275,15 +274,12 @@ def main(n_epochs=20000, model_dir=".") -> Number:
     model.setup_validation_data(n_validation)
     model.plot_dataset()
 
-    config.lr = 0.0004
-
     trainer = Trainer(model, config, model_dir)
 
     val_err = trainer.train()
 
     fig = model.plot_validation(None, None)
-    fig.savefig("plots/validation_diffusion.pdf")
-
+    fig.savefig("/home/leiterrl/diss_plots/sciml/validation_diffusion.pdf")
 
     return val_err
 
