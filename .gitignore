@@ -104,3 +104,4 @@ cache/
 # tensorboard run folder
 run/
 log/
+runs_*/
