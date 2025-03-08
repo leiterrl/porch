@@ -7,5 +7,5 @@ pytest==7.1.2
 seaborn==0.11.2
 tensorboard==2.9.1
 toml==0.10.2
-torch==1.13.1
+torch==2.2.0
 tqdm==4.64.0
