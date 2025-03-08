@@ -20,8 +20,6 @@ from porch.util import gradient
 
 import matplotlib.pyplot as plt
 import numpy as np
-from raphplot.app_plots import plot_training_results_field_with_error
-from raphplot.constants import FIG_SIZE_NORMAL, rc_config_font_size, SHARED_PATH
 
 try:
     from torch import hstack, vstack
@@ -153,8 +151,7 @@ class DiffusionModel(BaseModel):
         self.validation_data = hstack([val_X, val_u]).to(device=self.config.device)
 
     def plot_dataset(self) -> None:
-        matplotlib.rcParams.update(rc_config_font_size())
-        fig, axs = plt.subplots(1, 1, figsize=FIG_SIZE_NORMAL)
+        fig, axs = plt.subplots(1, 1, figsize=( 12,6 ))
         for name in self.get_data_names():
             data_in = self.get_input(name).cpu().numpy()
             axs.scatter(data_in[:, 1], data_in[:, 0], label=name, alpha=0.5)
@@ -163,7 +160,7 @@ class DiffusionModel(BaseModel):
         axs.set_ylabel("x")
         axs.legend()
         plt.tight_layout()
-        plt.savefig(SHARED_PATH / "sciml/diffusion_dataset.pdf")
+        plt.savefig("plots/diffusion_dataset.pdf")
 
     def plot_validation(self, writer, iteration) -> Figure:
         validation_in = self.validation_data[:, : self.network.d_in]
@@ -180,19 +177,32 @@ class DiffusionModel(BaseModel):
         im_data = im_data.reshape(domain_shape)
         im_data_gt = im_data_gt.reshape(domain_shape)
 
-        max_error = np.max(np.abs(im_data - im_data_gt))
+        axs: list[plt.Axes]
+        fig, axs = plt.subplots(2, 1, figsize=[12, 6], sharex=True)
 
-        fig = plot_training_results_field_with_error(
+        im1 = axs[0].imshow(
             im_data,
-            im_data_gt,
-            [0.0, T, 0.0, L],
-            vmin=-1.0,
-            vmax=1.0,
-            vmin2=-max_error,
-            vmax2=max_error,
-            title1="Prediction",
-            title2="Error",
+            interpolation="nearest",
+            extent=[0.0, 10.0, 0.0, 2.0 * np.pi],
+            origin="lower",
+            aspect="auto",
         )
+
+
+        im2 = axs[1].imshow(
+            im_data_gt,
+            interpolation="nearest",
+            extent=[0.0, 10.0, 0.0, 2.0 * np.pi],
+            origin="lower",
+            aspect="auto",
+        )
+
+        fig.colorbar(im1, extend="both", shrink=0.9, ax=axs[0])
+        fig.colorbar(im2, extend="both", shrink=0.9, ax=axs[1])
+
+        axs[1].set_xlabel("$t$")
+        axs[0].set_ylabel("$x$")
+        axs[1].set_ylabel("$x$")
 
         plt.tight_layout()
         return fig
@@ -279,7 +289,7 @@ def main(n_epochs=20000, model_dir=".") -> Number:
     val_err = trainer.train()
 
     fig = model.plot_validation(None, None)
-    fig.savefig("/home/leiterrl/diss_plots/sciml/validation_diffusion.pdf")
+    fig.savefig("validation_diffusion.pdf")
 
     return val_err
 
