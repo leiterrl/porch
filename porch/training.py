@@ -3,6 +3,7 @@ import datetime
 import json
 import logging
 import os
+from pathlib import Path
 
 import torch
 from tqdm import tqdm
@@ -194,8 +195,9 @@ class Trainer:
         config_dict = dataclasses.asdict(self.config)
         config_dict["device"] = "none"
         config_dict["dtype"] = "none"
-        config_path = os.path.join(self.config.model_dir, "config.json")
-        with open(config_path, "w+") as config_file:
+        config_path = Path(self.config.model_dir) / "config.json"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        with config_path.open("w") as config_file:
             json.dump(config_dict, config_file)
 
         # with torch.profiler.profile(
