@@ -14,7 +14,7 @@ name = "porch"
 version="0.1.4"
 authors=[{name = "Raphael Leiteritz", email = "raphael.leiteritz@ipvs.uni-stuttgart.d"}]
 description = "A PyTorch Library for Scientific Machine Learning"
-readme = "README.rst"
+readme = "README.md"
 # packages=["porch"]
 requires-python = ">=3.7"
 keywords = ["porch",
@@ -46,7 +46,9 @@ classifiers = [
     "Topic :: Software Development",
 ]
 dependencies = [
-    "numpy", "tqdm"
+    "numpy",
+    "tqdm",
+    "importlib-metadata>=1.0; python_version<'3.8'"
 ]
 
 # [project.urls]
