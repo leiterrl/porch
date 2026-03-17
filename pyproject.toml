@@ -51,3 +51,6 @@ dependencies = [
 
 # [project.urls]
 # "Homepage" = "https://github.com/leiterrl/porch"
+
+[tool.coverage.run]
+omit = ["/tmp/*"]
