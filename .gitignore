@@ -105,3 +105,4 @@ cache/
 run/
 log/
 runs_*/
+validation_diffusion.pdf
